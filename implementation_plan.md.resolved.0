@@ -1,0 +1,72 @@
+# Implementation Plan - Rust Audio Visualizer
+
+## Goal
+Build a web application that visualizes audio by animating an image's color palette based on real-time audio power spectrum analysis. The core processing (FFT, image quantization, rendering) will use Rust/WASM for performance, sharing pixel memory directly with the JS canvas.
+
+## User Review Required
+> [!IMPORTANT]
+> - Confirm the preferred quantization method (e.g., K-means, Median Cut, or NeuQuant). I will start with a simple Median Cut or existing crate like `image` if possible, but might validly need a custom implementation for resizing/indexing.
+> - Confirm if a specific Rust FFT library is preferred (e.g., `rustfft`).
+
+## Proposed Architecture
+
+### [Tech Stack]
+- **Frontend**: Vite + React + TypeScript
+- **Backend/Core**: Rust + `wasm-bindgen`
+- **Build**: `vite-plugin-rsw` or `vite-plugin-wasm` with `wasm-pack`
+
+### [Data Flow]
+1. **Setup**:
+    - User uploads Image -> JS reads data -> Passes to Rust.
+    - Rust performs **Color Quantization** (reducing to 8/16/32/64 colors).
+    - Rust creates an **Index Map** (pixels -> palette index).
+    - Rust allocates a **Display Buffer** (RGBA) accessible by JS.
+2. **Runtime Loop (per frame)**:
+    - User uploads Audio -> JS `AudioContext` -> API.
+    - JS gets `ByteFrequencyData` or raw samples -> Passes to Rust.
+    - Rust computes **Power Spectrum** (if not done by JS AnalyzerNode) or processes the spectrum.
+    - Rust **Modifies Palette** colors based on audio frequencies.
+    - Rust **Reconstructs Image**: Iterates Index Map, looks up new Palette colors, writes to Display Buffer.
+    - JS constructs `ImageData` from the WASM memory view and puts it on `Canvas`.
+
+## Proposed Changes
+
+### [Directory Structure]
+```
+rust-audio-visualizer/
+├── src/               # React Frontend
+├── crate/             # Rust WASM code
+│   ├── src/lib.rs     # Core logic
+│   └── Cargo.toml
+├── vite.config.ts     # Configured for WASM
+└── package.json
+```
+
+### [Rust Component]
+#### [NEW] `crate/src/lib.rs`
+- **Struct `AudioVisualizer`**:
+    - `width`, `height`: u32
+    - `index_map`: `Vec<u8>` (stores palette index per pixel)
+    - `palette`: `Vec<[u8; 3]>` (current RGB palette)
+    - `display_buffer`: `Vec<u8>` (flat RGBA buffer for Canvas)
+- **Methods**:
+    - `new()`
+    - `load_image(data: &[u8])`: Decodes and quantizes image.
+    - `process_audio(samples: &[f32])`: Updates palette based on audio.
+    - `render()`: Updates `display_buffer`.
+    - `get_display_buffer_ptr()`: Returns pointer to memory.
+    - `get_display_buffer_len()`: Returns length.
+
+### [Frontend Component]
+#### [NEW] `src/components/Visualizer.tsx`
+- Handles `requestAnimationFrame`.
+- Manages `AudioContext` and `AnalyserNode`.
+- Bridges `wasm` memory to `canvas`.
+
+## Verification Plan
+
+### Manual Verification
+- **Load Test**: Load large images and check FPS.
+- **Audio Test**: Ensure audio plays and visualizer reacts synchronously.
+- **Palette Test**: Verify switching between 8, 16, 32, 64 colors works correctly.
+- **Memory Test**: Ensure to WASM memory leaks (cleanup if visualizer is reset).

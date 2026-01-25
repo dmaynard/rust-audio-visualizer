@@ -1,0 +1,24 @@
+# Node
+node_modules
+dist
+.env
+
+# Rust
+target
+debug
+release
+**/*.rs.bk
+
+# WASM
+pkg
+crate/pkg
+crate/target
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea
+.vscode
+*.swp

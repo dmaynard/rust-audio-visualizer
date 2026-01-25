@@ -1,0 +1,5 @@
+{
+  "artifactType":  "ARTIFACT_TYPE_TASK",
+  "summary":  "Task list for the Rust/WASM Audio Visualizer Web App. Includes project setup, Rust core logic, Web UI, and integration steps.",
+  "updatedAt":  "2026-01-25T01:47:50.857165Z"
+}

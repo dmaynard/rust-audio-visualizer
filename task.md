@@ -1,0 +1,28 @@
+# Tasks
+
+- [/] Project Setup
+    - [x] Create project directory `rust-audio-visualizer` <!-- id: 0 -->
+    - [x] Initialize Vite + React + TypeScript project <!-- id: 1 -->
+    - [x] Initialize Rust crate (wasm-pack) <!-- id: 2 -->
+    - [x] Configure build (vite-plugin-wasm / wasm-pack) <!-- id: 3 -->
+- [/] Rust Core Implementation
+    - [x] Define shared memory structure for pixels <!-- id: 4 -->
+    - [x] Implement FFT / Power Spectrum analysis (Handled via input processing) <!-- id: 5 -->
+    - [x] Implement Color Reduction (Median Cut) <!-- id: 6 -->
+    - [x] Implement Image Indexing Logic <!-- id: 7 -->
+    - [x] Implement Palette Animation System <!-- id: 8 -->
+- [/] web UI Implementation
+    - [x] Create Audio Player Controls (Play, Pause, Progress) <!-- id: 9 -->
+    - [x] Implement File Upload (Audio & Image) <!-- id: 10 -->
+    - [x] Setup Canvas & Animation Loop <!-- id: 11 -->
+    - [ ] Build User Settings (Palette Size Selector) <!-- id: 12 -->
+- [ ] Integration & Wiring
+    - [ ] Connect AudioContext to WASM <!-- id: 13 -->
+    - [ ] Connect WASM Visuals to Canvas <!-- id: 14 -->
+- [ ] Verification
+    - [ ] Verify Audio Playback <!-- id: 15 -->
+    - [ ] Verify Visualizer Performance & Correctness <!-- id: 16 -->
+- [/] Documentation
+    - [x] Create and Maintain `blog.md` <!-- id: 17 -->
+- [ ] Deployment
+    - [ ] Configure Netlify or GitHub Pages <!-- id: 18 -->
