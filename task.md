@@ -5,23 +5,34 @@
     - [x] Initialize Vite + React + TypeScript project <!-- id: 1 -->
     - [x] Initialize Rust crate (wasm-pack) <!-- id: 2 -->
     - [x] Configure build (vite-plugin-wasm / wasm-pack) <!-- id: 3 -->
-- [/] Rust Core Implementation
+- [x] Rust Core Implementation
     - [x] Define shared memory structure for pixels <!-- id: 4 -->
     - [x] Implement FFT / Power Spectrum analysis (Handled via input processing) <!-- id: 5 -->
+    - [x] Create initial `Visualizer.tsx` component
+    - [x] Create `lib.rs` for Rust logic
+    - [x] Set up WASM build pipeline
+    - [x] Integrate `audio_visualizer_core` with React
+    - [x] Implement Basic Audio Frequency Analysis
+    - [x] Implement Canvas Rendering Loop
+    - [x] Debug WASM Heap Corruption Steps:
+        - [x] Isolate Image Loading (Version 1-3)
+        - [x] Isolate Renderer (Version 4-8)
+        - [x] Isolate Allocator (Version 9-14)
+        - [x] **Implement Static Buffers (Version 15 - FIX)**
+    - [x] Restore "Color Pumping" Visualization Logic
     - [x] Implement Color Reduction (Median Cut) <!-- id: 6 -->
     - [x] Implement Image Indexing Logic <!-- id: 7 -->
     - [x] Implement Palette Animation System <!-- id: 8 -->
-- [/] web UI Implementation
+- [x] web UI Implementation
     - [x] Create Audio Player Controls (Play, Pause, Progress) <!-- id: 9 -->
     - [x] Implement File Upload (Audio & Image) <!-- id: 10 -->
     - [x] Setup Canvas & Animation Loop <!-- id: 11 -->
-    - [ ] Build User Settings (Palette Size Selector) <!-- id: 12 -->
-- [ ] Integration & Wiring
-    - [ ] Connect AudioContext to WASM <!-- id: 13 -->
-    - [ ] Connect WASM Visuals to Canvas <!-- id: 14 -->
-- [ ] Verification
+    - [x] Improve Button Contrast (Force White Text) <!-- id: 17 -->
+    - [x] Create UI for color/bin selection (4, 8, 16, 32, 64) <!-- id: 19 -->
+    - [x] Sync Palette size with Frequency Bins <!-- id: 20 -->
+    - [x] Store Raw Image Buffer in Rust for re-quantization <!-- id: 21 -->
     - [ ] Verify Audio Playback <!-- id: 15 -->
-    - [ ] Verify Visualizer Performance & Correctness <!-- id: 16 -->
+    - [x] Verify Visualizer Performance & Correctness <!-- id: 16 -->
 - [/] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->
 - [ ] Deployment

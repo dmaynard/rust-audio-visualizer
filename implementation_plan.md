@@ -34,16 +34,20 @@ Build a web application that visualizes audio by animating an image's color pale
 
 ### [Rust Component]
 #### [DONE] `crate/src/lib.rs`
+#### [MODIFY] `crate/src/lib.rs`
 - **Struct `AudioVisualizer`**:
     - `width`, `height`: u32
     - `index_map`: `Vec<u8>` (stores palette index per pixel)
     - `palette`: `Vec<u8>` (current RGB palette)
     - `display_buffer`: `Vec<u8>` (flat RGBA buffer for Canvas)
+    - **[NEW] `RAW_IMAGE_BUFFER`: `static mut [u8]`** (stores original image for re-quantization)
 - **Methods**:
     - `new()`
     - `load_image(data: &[u8])`: Decodes and quantizes image.
     - `process_audio(samples: &[u8])`: Updates palette based on audio frequency data.
     - `render()`: Updates `display_buffer`.
+    - **[NEW] `set_color_count(count: u8)`**: Re-quantizes image and updates palette size.
+    - **[MOD] `process_frequencies`**: Averages bins to match palette size.
 
 ### [Frontend Component]
 #### [NEW] `src/components/Visualizer.tsx`

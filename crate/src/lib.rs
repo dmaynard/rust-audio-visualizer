@@ -8,8 +8,9 @@ extern "C" {
 }
 
 // STATIC BUFFERS - Version 15 (The Nuclear Option)
-const MAX_WIDTH: usize = 800;
-const MAX_HEIGHT: usize = 600;
+// STATIC BUFFERS - Version 15 (The Nuclear Option)
+const MAX_WIDTH: usize = 1600;
+const MAX_HEIGHT: usize = 1200;
 const MAX_PIXELS: usize = MAX_WIDTH * MAX_HEIGHT;
 const BUFFER_SIZE: usize = MAX_PIXELS * 4;
 const INPUT_SIZE: usize = 2048; // Ample space for FFT data
@@ -17,76 +18,144 @@ const INPUT_SIZE: usize = 2048; // Ample space for FFT data
 static mut DISPLAY_BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 static mut PIXELS: [u8; MAX_PIXELS] = [0; MAX_PIXELS];
 static mut INPUT_BUFFER: [u8; INPUT_SIZE] = [0; INPUT_SIZE];
-static mut PALETTE: Vec<u8> = Vec::new(); 
-static mut ORIGINAL_PALETTE: Vec<u8> = Vec::new();
+static mut RAW_IMAGE_BUFFER: [u8; MAX_PIXELS * 3] = [0; MAX_PIXELS * 3]; // RGB
+
+// Fixed size arrays for Palette (Max 256 colors * 3 channels = 768)
+static mut PALETTE: [u8; 768] = [0; 768];
+static mut ORIGINAL_PALETTE: [u8; 768] = [0; 768];
+static mut BIN_PEAKS: [f32; 256] = [0.1; 256];
+
+// State moved to Statics
+static mut IMG_WIDTH: u32 = 0;
+static mut IMG_HEIGHT: u32 = 0;
+static mut INPUT_LEN: usize = 0;
+static mut ACTIVE_PALETTE_LEN: usize = 0; // Number of bytes used in palette (colors * 3)
 
 #[wasm_bindgen]
-pub struct AudioVisualizer {
-    width: u32,
-    height: u32,
-    // input_buffer_len tracked by JS side essentially, but we can store used len
-    input_len: usize,
-}
+pub struct AudioVisualizer;
 
 #[wasm_bindgen]
 impl AudioVisualizer {
     #[wasm_bindgen(constructor)]
     pub fn new() -> AudioVisualizer {
         console_error_panic_hook::set_once();
-        // Initialize palette vectors once
         unsafe {
-            if PALETTE.capacity() == 0 {
-                PALETTE = Vec::with_capacity(256);
-                ORIGINAL_PALETTE = Vec::with_capacity(256);
-            }
+            // Reset logic
+            IMG_WIDTH = 0;
+            IMG_HEIGHT = 0;
+            INPUT_LEN = 0;
+            ACTIVE_PALETTE_LEN = 0;
         }
-        AudioVisualizer {
-            width: 0,
-            height: 0,
-            input_len: 0,
-        }
+        AudioVisualizer
     }
 
-    pub fn load_image(&mut self, data: &[u8]) -> Result<(), JsValue> {
-        let img = image::load_from_memory(data)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        
-        let img = img.resize(800, 600, image::imageops::FilterType::Lanczos3);
-        self.width = img.width();
-        self.height = img.height();
-        
-        // Safety check
-        if self.width as usize > MAX_WIDTH || self.height as usize > MAX_HEIGHT {
-             return Err(JsValue::from_str("Image too large for static buffer"));
-        }
-
-        // Convert to RGB8
-        let rgb_img = img.to_rgb8();
-        let raw_pixels = rgb_img.as_raw();
-        let pixels: Vec<[u8; 3]> = raw_pixels.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
-
-        // Quantize to 64 colors
-        let (palette, indices) = median_cut(&pixels, 64);
-        
+    pub fn load_image(&self, width: u32, height: u32, data: &[u8]) -> Result<(), JsValue> {
         unsafe {
-            PALETTE = palette.iter().flat_map(|c| c.to_vec()).collect();
-            ORIGINAL_PALETTE = PALETTE.clone();
-            
-            // Copy indices to static PIXELS
-            let len = indices.len().min(MAX_PIXELS);
-            PIXELS[0..len].copy_from_slice(&indices[0..len]);
+            if width as usize > MAX_WIDTH || height as usize > MAX_HEIGHT {
+                 return Err(JsValue::from_str("Image too large for static buffer"));
+            }
+            IMG_WIDTH = width;
+            IMG_HEIGHT = height;
+        }
+
+        unsafe {
+            let pixel_count = (width * height) as usize;
+            let expected_len = pixel_count * 4;
+            if data.len() != expected_len {
+                 return Err(JsValue::from_str("Data length mismatch"));
+            }
+
+            for i in 0..pixel_count {
+                let src_idx = i * 4;
+                let dst_idx = i * 3;
+                RAW_IMAGE_BUFFER[dst_idx] = data[src_idx];
+                RAW_IMAGE_BUFFER[dst_idx + 1] = data[src_idx + 1];
+                RAW_IMAGE_BUFFER[dst_idx + 2] = data[src_idx + 2];
+            }
         }
         
-        // Initial render
-        self.render();
+        self.set_color_count(64);
         
         Ok(())
     }
 
-    pub fn resize_input_buffer(&mut self, size: usize) {
-        // Just track the size, don't realloc static
-        if size <= INPUT_SIZE {
-            self.input_len = size;
+    pub fn set_color_count(&self, count: u8) {
+        unsafe {
+            let pixel_count = (IMG_WIDTH * IMG_HEIGHT) as usize;
+            if pixel_count == 0 { return; }
+            
+            // 1. Downsample
+            let step = (pixel_count / 4096).max(1);
+            let mut sample_pixels = Vec::with_capacity(4096);
+            
+            for i in (0..pixel_count).step_by(step) {
+                let r = RAW_IMAGE_BUFFER[i*3];
+                let g = RAW_IMAGE_BUFFER[i*3+1];
+                let b = RAW_IMAGE_BUFFER[i*3+2];
+                sample_pixels.push([r, g, b]);
+            }
+
+            // 2. Generate Palette
+            let (palette, _) = median_cut(&sample_pixels, count as usize);
+            
+            // Store to Static Arrays
+            let p_len = palette.len().min(256);
+            ACTIVE_PALETTE_LEN = p_len * 3;
+            
+            for (i, c) in palette.iter().take(p_len).enumerate() {
+                PALETTE[i*3] = c[0];
+                PALETTE[i*3+1] = c[1];
+                PALETTE[i*3+2] = c[2];
+                
+                ORIGINAL_PALETTE[i*3] = c[0];
+                ORIGINAL_PALETTE[i*3+1] = c[1];
+                ORIGINAL_PALETTE[i*3+2] = c[2];
+                
+                // Reset peaks
+                BIN_PEAKS[i] = 0.1;
+            }
+
+            // 3. Map pixels
+            // Create a temporary slice view for matching to avoid accessing global PALETTE repeatedly in loop overhead?
+            // Actually, direct access is fast.
+            
+            // We can't iterate PALETTE easily because it's [u8; 768].
+            // Let's make a local copy of colors for matching.
+            let colors: Vec<[u8; 3]> = (0..p_len).map(|i| {
+                [PALETTE[i*3], PALETTE[i*3+1], PALETTE[i*3+2]]
+            }).collect();
+
+            for i in 0..pixel_count {
+                let r = RAW_IMAGE_BUFFER[i*3];
+                let g = RAW_IMAGE_BUFFER[i*3+1];
+                let b = RAW_IMAGE_BUFFER[i*3+2];
+                
+                let mut min_dist = std::i32::MAX;
+                let mut best_idx = 0;
+                
+                for (idx, color) in colors.iter().enumerate() {
+                    let dr = r as i32 - color[0] as i32;
+                    let dg = g as i32 - color[1] as i32;
+                    let db = b as i32 - color[2] as i32;
+                    let dist = dr*dr + dg*dg + db*db;
+                    
+                    if dist < min_dist {
+                        min_dist = dist;
+                        best_idx = idx;
+                    }
+                }
+                PIXELS[i] = best_idx as u8;
+            }
+            
+            self.render();
+        }
+    }
+
+    pub fn resize_input_buffer(&self, size: usize) {
+        unsafe {
+            if size <= INPUT_SIZE {
+                INPUT_LEN = size;
+            }
         }
     }
     
@@ -94,55 +163,77 @@ impl AudioVisualizer {
         unsafe { INPUT_BUFFER.as_ptr() }
     }
 
-    pub fn process_frequencies(&mut self) -> f32 {
-        let len = self.input_len;
-        if len == 0 { return 0.0; }
-        
+    pub fn process_frequencies(&self) -> f32 {
         unsafe {
-            if PALETTE.is_empty() { return 0.0; }
+            let len = INPUT_LEN;
+            if len == 0 { return 0.0; }
+        
+            let palette_colors = ACTIVE_PALETTE_LEN / 3;
+            if palette_colors == 0 { return 0.0; }
             
-            let bass_end = len / 3;
+            let bins_per_color = (len as f32 / palette_colors as f32).max(1.0);
             
-            // Simple safe sum
-            let mut bass: u32 = 0;
-            for i in 0..bass_end {
-                 bass += INPUT_BUFFER[i] as u32;
-            }
-            
-            let bass_count = (bass_end as u32).max(1);
-            let bass_avg = (bass / bass_count) as f32 / 255.0;
-            
-            // Animation: Mutate Palette
-            let effect = 0.5 + 4.0 * bass_avg;
-            
-            for (i, pixel) in PALETTE.chunks_exact_mut(3).enumerate() {
+            for i in 0..palette_colors {
+                let start_bin = (i as f32 * bins_per_color) as usize;
+                let end_bin = ((i + 1) as f32 * bins_per_color) as usize;
+                let end_bin = end_bin.min(len);
+                
+                let mut sum: u32 = 0;
+                let mut count: u32 = 0;
+                
+                for b in start_bin..end_bin {
+                    if b >= INPUT_SIZE { break; } 
+                    sum += INPUT_BUFFER[b] as u32;
+                    count += 1;
+                }
+                
+                let energy = if count > 0 {
+                    (sum / count) as f32 / 255.0
+                } else if start_bin < len {
+                     INPUT_BUFFER[start_bin] as f32 / 255.0
+                } else {
+                    0.0
+                };
+
+                // AGC Implementation
+                BIN_PEAKS[i] *= 0.98; 
+                if BIN_PEAKS[i] < 0.1 { BIN_PEAKS[i] = 0.1; }
+                
+                if energy > BIN_PEAKS[i] {
+                    BIN_PEAKS[i] = energy;
+                }
+                
+                let normalized = energy / BIN_PEAKS[i];
+                let effect = 0.8 + (normalized * 0.6);
+
                 let base_idx = i * 3;
-                if base_idx + 2 >= ORIGINAL_PALETTE.len() { break; }
-                
-                let r_orig = ORIGINAL_PALETTE[base_idx] as f32;
-                let g_orig = ORIGINAL_PALETTE[base_idx+1] as f32;
-                let b_orig = ORIGINAL_PALETTE[base_idx+2] as f32;
-                
-                pixel[0] = (r_orig * effect).min(255.0) as u8;
-                pixel[1] = (g_orig * effect).min(255.0) as u8;
-                pixel[2] = (b_orig * effect).min(255.0) as u8;
+                // Bounds check
+                if base_idx + 2 < 768 {
+                    let r_orig = ORIGINAL_PALETTE[base_idx] as f32;
+                    let g_orig = ORIGINAL_PALETTE[base_idx+1] as f32;
+                    let b_orig = ORIGINAL_PALETTE[base_idx+2] as f32;
+                    
+                    PALETTE[base_idx] = (r_orig * effect).min(255.0) as u8;
+                    PALETTE[base_idx+1] = (g_orig * effect).min(255.0) as u8;
+                    PALETTE[base_idx+2] = (b_orig * effect).min(255.0) as u8;
+                }
             }
             
-            return bass_avg;
+            0.0 
         }
     }
 
-    pub fn render(&mut self) {
-        let pixel_count = (self.width * self.height) as usize;
-        let buffer_len = pixel_count * 4;
-        
+    pub fn render(&self) {
         unsafe {
+            let pixel_count = (IMG_WIDTH * IMG_HEIGHT) as usize;
+            
             for i in 0..pixel_count {
                 let color_idx = PIXELS[i] as usize;
                 let base = i * 4;
                 
                 let p_idx = color_idx * 3;
-                if p_idx + 2 < PALETTE.len() {
+                // Use fixed bound 768. Logic relies on valid color_idx from set_color_count
+                if p_idx + 2 < 768 {
                     DISPLAY_BUFFER[base] = PALETTE[p_idx];
                     DISPLAY_BUFFER[base + 1] = PALETTE[p_idx + 1];
                     DISPLAY_BUFFER[base + 2] = PALETTE[p_idx + 2];
@@ -157,15 +248,15 @@ impl AudioVisualizer {
     }
 
     pub fn get_display_buffer_len(&self) -> usize {
-        (self.width * self.height * 4) as usize
+        unsafe { (IMG_WIDTH * IMG_HEIGHT * 4) as usize }
     }
     
     pub fn get_width(&self) -> u32 {
-        self.width
+        unsafe { IMG_WIDTH }
     }
     
     pub fn get_height(&self) -> u32 {
-        self.height
+        unsafe { IMG_HEIGHT }
     }
 }
 

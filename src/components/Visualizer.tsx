@@ -13,6 +13,8 @@ export const Visualizer: React.FC = () => {
     const [startTime, setStartTime] = useState(0);
     const [pausedAt, setPausedAt] = useState(0);
     const [hasAudio, setHasAudio] = useState(false);
+    const [colorCount, setColorCount] = useState(64); // Default 64
+
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationFrameRef = useRef<number>(0);
@@ -23,6 +25,18 @@ export const Visualizer: React.FC = () => {
     useEffect(() => {
         isPlayingRef.current = isPlaying;
     }, [isPlaying]);
+
+    const handleColorCountChange = (count: number) => {
+        setColorCount(count);
+        if (visualizer) {
+            visualizer.set_color_count(count);
+            // Force a re-render of the frame to show new palette immediately
+            // But only if we have an image loaded (width > 0)
+            if (visualizer.get_width() > 0) {
+                renderFrame();
+            }
+        }
+    };
 
     useEffect(() => {
         const loadWasm = async () => {
@@ -118,17 +132,54 @@ export const Visualizer: React.FC = () => {
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || !e.target.files[0] || !visualizer) return;
         const file = e.target.files[0];
-        const buffer = await file.arrayBuffer();
-        const data = new Uint8Array(buffer);
 
-        try {
-            visualizer.load_image(data);
-            resizeCanvas();
-            renderFrame();
-        } catch (err) {
-            console.error("Error loading image:", err);
-            alert("Error loading image. Check console.");
-        }
+        // Use Image API to load and resize in JS (avoids WASM OOM)
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+
+            // Calculate dimensions satisfying max 1600x1200
+            const MAX_W = 1600;
+            const MAX_H = 1200;
+            let w = img.width;
+            let h = img.height;
+
+            // Lanczos-like scaling logic (simplified aspect ratio preservation)
+            const scale = Math.min(1.0, Math.min(MAX_W / w, MAX_H / h));
+            w = Math.floor(w * scale);
+            h = Math.floor(h * scale);
+
+            // Helper Canvas
+            const offscreen = document.createElement('canvas');
+            offscreen.width = w;
+            offscreen.height = h;
+            const ctx = offscreen.getContext('2d');
+            if (!ctx) return;
+
+            // High quality resize
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, w, h);
+
+            const imageData = ctx.getImageData(0, 0, w, h);
+            const data = new Uint8Array(imageData.data.buffer);
+
+            try {
+                visualizer.load_image(w, h, data);
+                resizeCanvas();
+                renderFrame();
+            } catch (err) {
+                console.error("Error loading image:", err);
+                alert("Error loading image. Check console.");
+            }
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            alert("Failed to load image");
+        };
+        img.src = url;
     };
 
     const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,7 +219,6 @@ export const Visualizer: React.FC = () => {
         const len = visualizer.get_display_buffer_len();
 
         const memBuffer = new Uint8Array(wasmMemory.buffer);
-        // console.log("Memory Buffer Size:", memBuffer.byteLength); 
         const imageBuffer = new Uint8ClampedArray(memBuffer.subarray(bufferPtr, bufferPtr + len));
         const imageData = new ImageData(imageBuffer, width, height);
 
@@ -201,24 +251,24 @@ export const Visualizer: React.FC = () => {
         const wasmInputArray = new Uint8Array(wasmMemory.buffer, inputPtr, bufferLength);
         wasmInputArray.set(tempArray);
 
-        // Debug: Check if we have audio data
-        if (animationFrameRef.current % 60 === 0) {
-            const max = Math.max(...tempArray);
-            console.log("Audio Data Max:", max, "Active:", isPlayingRef.current);
-        }
-
+        // 5. Measure Rust Execution Time
+        const t0 = performance.now();
         try {
-            // Process frequencies uses the internal buffer we just wrote to
-            const debugVal = visualizer.process_frequencies();
-            if (animationFrameRef.current % 60 === 0) {
-                console.log("Rust returned bass_avg:", debugVal);
-            }
+            visualizer.process_frequencies();
+            visualizer.render();
         } catch (e) {
-            console.error("Rust process_frequencies error:", e);
+            console.error("Rust execution error:", e);
         }
-        visualizer.render();
+        const t1 = performance.now();
 
+        // 6. Measure Render/Paint Time
         renderFrame();
+        const t2 = performance.now();
+
+        // Log performance stats every 60 frames (approx 1 sec)
+        if (animationFrameRef.current % 60 === 0) {
+            console.log(`Perf (ms) -> Rust: ${(t1 - t0).toFixed(2)} | JS/Paint: ${(t2 - t1).toFixed(2)} | Total: ${(t2 - t0).toFixed(2)}`);
+        }
 
         animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -245,6 +295,24 @@ export const Visualizer: React.FC = () => {
                     )}
                 </div>
             )}
+
+            <div className="settings-panel" style={{ marginTop: '10px', marginBottom: '10px' }}>
+                <span style={{ marginRight: '10px', fontWeight: 'bold' }}>Colors:</span>
+                {[4, 8, 16, 32, 64].map(count => (
+                    <label key={count} style={{ marginRight: '10px', cursor: 'pointer' }}>
+                        <input
+                            type="radio"
+                            name="colorCount"
+                            value={count}
+                            checked={colorCount === count}
+                            onChange={() => handleColorCountChange(count)}
+                            disabled={!visualizer}
+                        />
+                        <span style={{ marginLeft: '4px' }}>{count}</span>
+                    </label>
+                ))}
+            </div>
+
             {!visualizer ? <p>Loading WASM...</p> : null}
             <canvas ref={canvasRef} className="visualizer-canvas" />
         </div>

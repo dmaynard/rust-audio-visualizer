@@ -37,6 +37,7 @@ header h1 {
 .upload-btn {
   padding: 0.8rem 1.6rem;
   background-color: #1a1a1a;
+  color: #ffffff;
   border: 1px solid #333;
   border-radius: 8px;
   cursor: pointer;
@@ -58,6 +59,7 @@ header h1 {
 .control-btn {
   padding: 0.6rem 1.2rem;
   background-color: #2a2a2a;
+  color: #ffffff;
   border: 1px solid #444;
   border-radius: 6px;
   cursor: pointer;
