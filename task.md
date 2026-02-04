@@ -31,9 +31,9 @@
     - [x] Create UI for color/bin selection (4, 8, 16, 32, 64) <!-- id: 19 -->
     - [x] Sync Palette size with Frequency Bins <!-- id: 20 -->
     - [x] Store Raw Image Buffer in Rust for re-quantization <!-- id: 21 -->
-    - [ ] Verify Audio Playback <!-- id: 15 -->
+    - [x] Verify Audio Playback <!-- id: 15 -->
     - [x] Verify Visualizer Performance & Correctness <!-- id: 16 -->
-- [/] Documentation
+- [x] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->
 - [ ] Deployment
     - [ ] Configure Netlify or GitHub Pages <!-- id: 18 -->

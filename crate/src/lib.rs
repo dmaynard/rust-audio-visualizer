@@ -171,40 +171,49 @@ impl AudioVisualizer {
             let palette_colors = ACTIVE_PALETTE_LEN / 3;
             if palette_colors == 0 { return 0.0; }
             
-            let bins_per_color = (len as f32 / palette_colors as f32).max(1.0);
+            // Quadratic Scaling (Pseudo-Log) to match human hearing
+            // This grants more resolution to low frequencies (Bass) and compresses high frequencies
+            let len_f = len as f32;
+            let pc_f = palette_colors as f32;
             
             for i in 0..palette_colors {
-                let start_bin = (i as f32 * bins_per_color) as usize;
-                let end_bin = ((i + 1) as f32 * bins_per_color) as usize;
-                let end_bin = end_bin.min(len);
+                let i_f = i as f32;
+                // Formula: bin = len * (i / count)^1.5 (Less aggressive than squared, more coverage)
+                let start_ratio = (i_f / pc_f).powf(1.5);
+                let end_ratio = ((i_f + 1.0) / pc_f).powf(1.5);
                 
-                let mut sum: u32 = 0;
-                let mut count: u32 = 0;
+                let start_bin = (start_ratio * len_f) as usize;
+                let end_bin = (end_ratio * len_f) as usize;
+                
+                // Ensure at least 1 bin width
+                let end_bin = end_bin.max(start_bin + 1).min(len);
+                
+                let mut max_val: u8 = 0;
                 
                 for b in start_bin..end_bin {
                     if b >= INPUT_SIZE { break; } 
-                    sum += INPUT_BUFFER[b] as u32;
-                    count += 1;
+                    let val = INPUT_BUFFER[b];
+                    if val > max_val { max_val = val; }
                 }
                 
-                let energy = if count > 0 {
-                    (sum / count) as f32 / 255.0
-                } else if start_bin < len {
-                     INPUT_BUFFER[start_bin] as f32 / 255.0
-                } else {
-                    0.0
-                };
+                let energy = max_val as f32 / 255.0;
 
-                // AGC Implementation
-                BIN_PEAKS[i] *= 0.98; 
-                if BIN_PEAKS[i] < 0.1 { BIN_PEAKS[i] = 0.1; }
+                // AGC Implementation - Aggressive Tuning for Dynamics
+                // Decay peak fast (drops 10% per frame)
+                BIN_PEAKS[i] *= 0.90; 
+                // Lower floor to 0.005 (1/200) to catch faint highs
+                if BIN_PEAKS[i] < 0.005 { BIN_PEAKS[i] = 0.005; }
                 
+                // Pump peak up if current energy is higher
                 if energy > BIN_PEAKS[i] {
                     BIN_PEAKS[i] = energy;
                 }
                 
                 let normalized = energy / BIN_PEAKS[i];
-                let effect = 0.8 + (normalized * 0.6);
+                
+                // Non-linear response (Square it) to emphasize beats
+                // Range: 0.5 (quiet) to 1.8 (loud)
+                let effect = 0.5 + (normalized * normalized * 1.3);
 
                 let base_idx = i * 3;
                 // Bounds check
@@ -213,9 +222,14 @@ impl AudioVisualizer {
                     let g_orig = ORIGINAL_PALETTE[base_idx+1] as f32;
                     let b_orig = ORIGINAL_PALETTE[base_idx+2] as f32;
                     
-                    PALETTE[base_idx] = (r_orig * effect).min(255.0) as u8;
-                    PALETTE[base_idx+1] = (g_orig * effect).min(255.0) as u8;
-                    PALETTE[base_idx+2] = (b_orig * effect).min(255.0) as u8;
+                    // Explicit saturation clamping to prevent wrap-around
+                    let r_new = r_orig * effect;
+                    let g_new = g_orig * effect;
+                    let b_new = b_orig * effect;
+
+                    PALETTE[base_idx] = if r_new > 255.0 { 255 } else { r_new as u8 };
+                    PALETTE[base_idx+1] = if g_new > 255.0 { 255 } else { g_new as u8 };
+                    PALETTE[base_idx+2] = if b_new > 255.0 { 255 } else { b_new as u8 };
                 }
             }
             
