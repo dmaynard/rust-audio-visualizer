@@ -1,64 +1,53 @@
-# Implementation Plan - Rust Audio Visualizer
+# Implementation Plan - HSL Palette Animation
 
 ## Goal
-Build a web application that visualizes audio by animating an image's color palette based on real-time audio power spectrum analysis. The core processing (FFT, image quantization, rendering) will use Rust/WASM for performance, sharing pixel memory directly with the JS canvas.
+Improve the visualizer's color dynamics by processing palette animation in HSL (Hue, Saturation, Lightness) space instead of RGB. This prevents color shifting artifacts when scaling brightness and allows for more natural saturation boosting on beats.
 
 ## User Review Required
 > [!NOTE]
-> - **Color Quantization**: User confirmed **Median Cut**.
-> - **Hosting**: Validating Netlify or GitHub Pages.
-> - **Documentation**: Maintain a `blog.md` development log.
-
-## Proposed Architecture
-
-### [Tech Stack]
-- **Frontend**: Vite + React + TypeScript
-- **Backend/Core**: Rust + `wasm-bindgen`
-- **Build**: `vite-plugin-rsw` or `vite-plugin-wasm` with `wasm-pack`
-
-### [Data Flow]
-1. **Setup**:
-    - User uploads Image -> JS reads data -> Passes to Rust.
-    - Rust performs **Color Quantization** (reducing to 8/16/32/64 colors).
-    - Rust creates an **Index Map** (pixels -> palette index).
-    - Rust allocates a **Display Buffer** (RGBA) accessible by JS.
-2. **Runtime Loop (per frame)**:
-    - User uploads Audio -> JS `AudioContext` -> API.
-    - JS gets `ByteFrequencyData` or raw samples -> Passes to Rust.
-    - Rust computes **Power Spectrum** (if not done by JS AnalyzerNode) or processes the spectrum.
-    - Rust **Modifies Palette** colors based on audio frequencies.
-    - Rust **Reconstructs Image**: Iterates Index Map, looks up new Palette colors, writes to Display Buffer.
-    - JS constructs `ImageData` from the WASM memory view and puts it on `Canvas`.
+> I will be implementing manual `rgb_to_hsl` and `hsl_to_rgb` conversion functions to keep the WASM binary size small, rather than adding a new dependency.
 
 ## Proposed Changes
 
-### [Rust Component]
-#### [DONE] `crate/src/lib.rs`
-#### [MODIFY] `crate/src/lib.rs`
-- **Struct `AudioVisualizer`**:
-    - `width`, `height`: u32
-    - `index_map`: `Vec<u8>` (stores palette index per pixel)
-    - `palette`: `Vec<u8>` (current RGB palette)
-    - `display_buffer`: `Vec<u8>` (flat RGBA buffer for Canvas)
-    - **[NEW] `RAW_IMAGE_BUFFER`: `static mut [u8]`** (stores original image for re-quantization)
-- **Methods**:
-    - `new()`
-    - `load_image(data: &[u8])`: Decodes and quantizes image.
-    - `process_audio(samples: &[u8])`: Updates palette based on audio frequency data.
-    - `render()`: Updates `display_buffer`.
-    - **[NEW] `set_color_count(count: u8)`**: Re-quantizes image and updates palette size.
-    - **[MOD] `process_frequencies`**: Averages bins to match palette size.
+### [Rust Core] `crate/src/lib.rs`
 
-### [Frontend Component]
-#### [NEW] `src/components/Visualizer.tsx`
-- Handles `requestAnimationFrame`.
-- Manages `AudioContext` and `AnalyserNode`.
-- Bridges `wasm` memory to `canvas`.
+#### [MODIFY] Structs and Statics
+- Add `static mut PALETTE_HSL: [f32; 768] = [0.0; 768];` (Stores H, S, L for each of the 256 max colors).
+- Populate `PALETTE_HSL` in `set_color_count` (after median cut generates RGB palette).
+
+#### [NEW] Helper Functions
+- `fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f32, f32, f32)`
+- `fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8)`
+
+#### [MODIFY] [lib.rs](file:///Users/dmaynard/projects/rust-audio-visualizer/crate/src/lib.rs)
+- Remove `data: &[u8]` argument from `load_image`.
+- Add `static mut UPLOAD_BUFFER: [u8; MAX_PIXELS * 4]`.
+- Add `get_upload_buffer_ptr()`.
+- Update `load_image` to read from `UPLOAD_BUFFER`.
+
+#### [MODIFY] [Visualizer.tsx](file:///Users/dmaynard/projects/rust-audio-visualizer/src/components/Visualizer.tsx)
+- Use `wasmMemory` and `get_upload_buffer_ptr` to upload image data.
+- Call `load_image(width, height)` (no data arg).
+
+#### [MODIFY] `process_frequencies`
+- Instead of scaling RGB directly (which can desaturate or shift hue):
+    1. Retrieve original (H, S, L) from `PALETTE_HSL`.
+    2. Calculate `energy` from audio (existing logic).
+    3. Modulate `Lightness`: `L_new = L_orig * effect`.
+        - Ensure dark colors can still light up (maybe add a base floor).
+    4. Modulate `Saturation`: `S_new = S_orig * (1.0 + energy * 0.2)` (Boost saturation on loud beats).
+    5. Convert back to RGB using `hsl_to_rgb`.
+    6. Update `PALETTE`.
 
 ## Verification Plan
 
 ### Manual Verification
-- **Load Test**: Load large images and check FPS.
-- **Audio Test**: Ensure audio plays and visualizer reacts synchronously.
-- **Palette Test**: Verify switching between 8, 16, 32, 64 colors works correctly.
-- **Memory Test**: Ensure to WASM memory leaks (cleanup if visualizer is reset).
+- **Visual Check**:
+    - Play audio.
+    - Observe if colors maintain their "identity" (Hue) while pulsing.
+    - Check if "black" or very dark colors pulse correctly (might need special handling since 0 * effect = 0).
+- **Performance**:
+    - Ensure the extra math (float conversions) doesn't drop FPS below 60.
+
+### Automated Tests
+- None planned for this visual effect, as it relies on subjective "look and feel".

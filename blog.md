@@ -23,3 +23,12 @@ Encountered Node.js v8.11.2. Requiring update to Node 18+ for Vite. Blocked on u
 
 ## 2026-01-24: Environment Check
 Encountered Node.js v8.11.2. Requiring update to Node 18+ for Vite. Blocked on user update.
+
+## 2026-02-03: HSL Palette Animation
+- **Goal**: Improve color dynamics and prevent hue shifts.
+- **Change**: Switched from RGB scaling to HSL interpolation.
+- **Logic**: 
+    - Converted palette to HSL on load.
+    - Modulated `Lightness` and `Saturation` based on audio energy.
+    - 1.0 Baseline: Silence (energy=0) now restores the exact original image colors.
+- **Status**: Implemented in Rust core on `feature/hsl-palette-animation`. Verified build.

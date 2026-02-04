@@ -3,6 +3,10 @@ import init, { AudioVisualizer } from '../../crate/pkg/audio_visualizer_core';
 
 export const Visualizer: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    // Flag to prevent recursive calls to WASM during image load
+    const isImageLoading = useRef(false);
+
     const [visualizer, setVisualizer] = useState<AudioVisualizer | null>(null);
     const [wasmMemory, setWasmMemory] = useState<WebAssembly.Memory | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -42,6 +46,7 @@ export const Visualizer: React.FC = () => {
         const loadWasm = async () => {
             const module = await init();
             setWasmMemory(module.memory);
+            console.log("Visualizer: WASM module loaded (v4 Tuned: Zero-Copy Upload)");
             const viz = new AudioVisualizer();
             setVisualizer(viz);
         };
@@ -116,6 +121,25 @@ export const Visualizer: React.FC = () => {
         stopAudio();
         setIsPlaying(false);
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+
+        // FORCE A RESET FRAME:
+        // When we pause, we want to reset the visualizer to the "silence" state (original palette)
+        if (visualizer && wasmMemory && analyserRef.current) {
+            const bufferLength = analyserRef.current.frequencyBinCount;
+            const inputPtr = visualizer.get_input_buffer_ptr();
+
+            // 1. Create a zero-filled buffer
+            const zeros = new Uint8Array(bufferLength).fill(0);
+
+            // 2. Write to WASM memory
+            const wasmInputArray = new Uint8Array(wasmMemory.buffer, inputPtr, bufferLength);
+            wasmInputArray.set(zeros);
+
+            // 3. Process and Render one frame
+            visualizer.process_frequencies();
+            visualizer.render();
+            renderFrame();
+        }
     };
 
     const rewindAudio = () => {
@@ -167,12 +191,32 @@ export const Visualizer: React.FC = () => {
             const data = new Uint8Array(imageData.data.buffer);
 
             try {
-                visualizer.load_image(w, h, data);
+                // Pause animation loop to prevent "recursive use of object" error
+                isImageLoading.current = true;
+
+                if (!visualizer || !wasmMemory) throw new Error("WASM not ready");
+
+                // 1. Get pointer to Rust's internal upload buffer
+                const uploadPtr = visualizer.get_upload_buffer_ptr();
+                if (uploadPtr === 0) throw new Error("Failed to get upload buffer pointer");
+
+                // 2. Copy image data directly into WASM memory (Zero Allocation on WASM side)
+                const wasmUploadBuffer = new Uint8Array(wasmMemory.buffer, uploadPtr, data.length);
+                wasmUploadBuffer.set(data);
+
+                // 3. Trigger processing (no data argument needed)
+                visualizer.load_image(w, h);
+
                 resizeCanvas();
                 renderFrame();
+
+                // Resume animation loop
+                isImageLoading.current = false;
+
             } catch (err) {
                 console.error("Error loading image:", err);
                 alert("Error loading image. Check console.");
+                isImageLoading.current = false; // Ensure we reset flag even on error
             }
         };
         img.onerror = () => {
@@ -252,23 +296,23 @@ export const Visualizer: React.FC = () => {
         wasmInputArray.set(tempArray);
 
         // 5. Measure Rust Execution Time
-        const t0 = performance.now();
+        // const t0 = performance.now();
         try {
             visualizer.process_frequencies();
             visualizer.render();
         } catch (e) {
             console.error("Rust execution error:", e);
         }
-        const t1 = performance.now();
+        // const t1 = performance.now();
 
         // 6. Measure Render/Paint Time
         renderFrame();
-        const t2 = performance.now();
+        // const t2 = performance.now();
 
         // Log performance stats every 60 frames (approx 1 sec)
-        if (animationFrameRef.current % 60 === 0) {
-            console.log(`Perf (ms) -> Rust: ${(t1 - t0).toFixed(2)} | JS/Paint: ${(t2 - t1).toFixed(2)} | Total: ${(t2 - t0).toFixed(2)}`);
-        }
+        // if (animationFrameRef.current % 60 === 0) {
+        //     console.log(`Perf(ms) -> Rust: ${ (t1 - t0).toFixed(2) } | JS / Paint: ${ (t2 - t1).toFixed(2) } | Total: ${ (t2 - t0).toFixed(2) } `);
+        // }
 
         animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -277,11 +321,11 @@ export const Visualizer: React.FC = () => {
         <div className="visualizer-container">
             <div className="controls">
                 <label className="upload-btn">
-                    Upload Image
+                    Load Image
                     <input type="file" accept="image/*" onChange={handleImageUpload} hidden />
                 </label>
                 <label className="upload-btn">
-                    Upload Audio
+                    Load Audio
                     <input type="file" accept="audio/*" onChange={handleAudioUpload} hidden />
                 </label>
             </div>

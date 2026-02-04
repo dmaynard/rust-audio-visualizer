@@ -33,6 +33,28 @@
     - [x] Store Raw Image Buffer in Rust for re-quantization <!-- id: 21 -->
     - [x] Verify Audio Playback <!-- id: 15 -->
     - [x] Verify Visualizer Performance & Correctness <!-- id: 16 -->
+- [x] Tune AGC parameters (attack/decay/gain) for better responsiveness
+- [x] Fix low color count/saturation issues (adjust mapping logic)
+- [x] Ensure all frequency bands are animating correctly
+- [x] Implement HSL Palette Animation
+    - [x] Create HSL <-> RGB conversion helpers
+    - [x] Store Palette in HSL format
+    - [x] Update `process_frequencies` to modulate L/S instead of RGB
+- [x] Fix: Reset colors on pause (Zero Energy) - Refinement: Use ORIGINAL_PALETTE for exact restoration
+    - [x] Add logging to verify silence detection
+    - [x] Investigate why image appears darker during playback
+    - [x] Tune HSL modulation to prevent washout (Headroom-aware)
+    - [x] Tune AGC Decay and Boost Factors to reduce sensitivity
+    - [x] Cleanup Debug Logging
+- [x] Cleanup Debug Logging
+- [x] Fix: Crash on second image load (unreachable)
+    - [x] Add trace logging to pinpoint panic location (Phase 2: Mapping/Render)
+    - [x] Simplify load_image signature (Remove Result) to rule out binding crash
+    - [x] Fix unsafe aliasing / recursive object use in Visualizer.tsx (Pause animation during load)
+    - [x] Increase Static Buffer Size (Potential Heap Corruption/Overflow?)
+    - [x] Binary Search Crash (Disable Mapping/Median Cut)
+    - [x] Implement Zero-Copy Upload (Manual Buffer) to fix Wasm Memory Crash
+- [x] Documentation
 - [x] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->
 - [ ] Deployment

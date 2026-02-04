@@ -9,20 +9,23 @@ extern "C" {
 
 // STATIC BUFFERS - Version 15 (The Nuclear Option)
 // STATIC BUFFERS - Version 15 (The Nuclear Option)
-const MAX_WIDTH: usize = 1600;
-const MAX_HEIGHT: usize = 1200;
+const MAX_WIDTH: usize = 2560;
+const MAX_HEIGHT: usize = 1440;
 const MAX_PIXELS: usize = MAX_WIDTH * MAX_HEIGHT;
 const BUFFER_SIZE: usize = MAX_PIXELS * 4;
 const INPUT_SIZE: usize = 2048; // Ample space for FFT data
+const UPLOAD_SIZE: usize = MAX_PIXELS * 4;
 
 static mut DISPLAY_BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 static mut PIXELS: [u8; MAX_PIXELS] = [0; MAX_PIXELS];
 static mut INPUT_BUFFER: [u8; INPUT_SIZE] = [0; INPUT_SIZE];
 static mut RAW_IMAGE_BUFFER: [u8; MAX_PIXELS * 3] = [0; MAX_PIXELS * 3]; // RGB
+static mut UPLOAD_BUFFER: [u8; UPLOAD_SIZE] = [0; UPLOAD_SIZE];
 
 // Fixed size arrays for Palette (Max 256 colors * 3 channels = 768)
 static mut PALETTE: [u8; 768] = [0; 768];
 static mut ORIGINAL_PALETTE: [u8; 768] = [0; 768];
+static mut PALETTE_HSL: [f32; 768] = [0.0; 768]; // H, S, L interleaved
 static mut BIN_PEAKS: [f32; 256] = [0.1; 256];
 
 // State moved to Statics
@@ -39,6 +42,7 @@ impl AudioVisualizer {
     #[wasm_bindgen(constructor)]
     pub fn new() -> AudioVisualizer {
         console_error_panic_hook::set_once();
+        log("Rust Core: Initialized (v3 Tuned: Slow AGC + Headroom Fix)");
         unsafe {
             // Reset logic
             IMG_WIDTH = 0;
@@ -49,45 +53,37 @@ impl AudioVisualizer {
         AudioVisualizer
     }
 
-    pub fn load_image(&self, width: u32, height: u32, data: &[u8]) -> Result<(), JsValue> {
+    pub fn get_upload_buffer_ptr(&self) -> *mut u8 {
+        unsafe { UPLOAD_BUFFER.as_mut_ptr() }
+    }
+
+    pub fn load_image(&self, width: u32, height: u32) {
         unsafe {
             if width as usize > MAX_WIDTH || height as usize > MAX_HEIGHT {
-                 return Err(JsValue::from_str("Image too large for static buffer"));
+                 // log("Rust Error: Image too large");
+                 return;
             }
+            // log(&format!("Rust: Loading Image {}x{}", width, height));
             IMG_WIDTH = width;
             IMG_HEIGHT = height;
         }
-
+        
         unsafe {
             let pixel_count = (width * height) as usize;
-            let expected_len = pixel_count * 4;
-            if data.len() != expected_len {
-                 return Err(JsValue::from_str("Data length mismatch"));
-            }
+            // No data len check needed (buffer is fixed/large enough by def, verified by MAX check)
 
             for i in 0..pixel_count {
                 let src_idx = i * 4;
                 let dst_idx = i * 3;
-                RAW_IMAGE_BUFFER[dst_idx] = data[src_idx];
-                RAW_IMAGE_BUFFER[dst_idx + 1] = data[src_idx + 1];
-                RAW_IMAGE_BUFFER[dst_idx + 2] = data[src_idx + 2];
+                // Read from UPLOAD_BUFFER instead of data slice
+                RAW_IMAGE_BUFFER[dst_idx] = UPLOAD_BUFFER[src_idx];
+                RAW_IMAGE_BUFFER[dst_idx + 1] = UPLOAD_BUFFER[src_idx + 1];
+                RAW_IMAGE_BUFFER[dst_idx + 2] = UPLOAD_BUFFER[src_idx + 2];
             }
-        }
         
-        self.set_color_count(64);
-        
-        Ok(())
-    }
-
-    pub fn set_color_count(&self, count: u8) {
-        unsafe {
-            let pixel_count = (IMG_WIDTH * IMG_HEIGHT) as usize;
-            if pixel_count == 0 { return; }
-            
-            // 1. Downsample
-            let step = (pixel_count / 4096).max(1);
-            let mut sample_pixels = Vec::with_capacity(4096);
-            
+            // Sampling for Median Cut
+            let step = 10;
+            let mut sample_pixels = Vec::with_capacity(pixel_count / step);
             for i in (0..pixel_count).step_by(step) {
                 let r = RAW_IMAGE_BUFFER[i*3];
                 let g = RAW_IMAGE_BUFFER[i*3+1];
@@ -96,7 +92,9 @@ impl AudioVisualizer {
             }
 
             // 2. Generate Palette
-            let (palette, _) = median_cut(&sample_pixels, count as usize);
+            // log("Rust: Generating Palette (Median Cut)");
+            let (palette, _) = median_cut(&sample_pixels, 64);
+            // log(&format!("Rust: Palette Generated ({} colors)", palette.len()));
             
             // Store to Static Arrays
             let p_len = palette.len().min(256);
@@ -110,22 +108,29 @@ impl AudioVisualizer {
                 ORIGINAL_PALETTE[i*3] = c[0];
                 ORIGINAL_PALETTE[i*3+1] = c[1];
                 ORIGINAL_PALETTE[i*3+2] = c[2];
+
+                // Convert to HSL and store
+                let (h, s, l) = rgb_to_hsl(c[0], c[1], c[2]);
+                PALETTE_HSL[i*3] = h;
+                PALETTE_HSL[i*3+1] = s;
+                PALETTE_HSL[i*3+2] = l;
                 
                 // Reset peaks
                 BIN_PEAKS[i] = 0.1;
             }
 
-            // 3. Map pixels
-            // Create a temporary slice view for matching to avoid accessing global PALETTE repeatedly in loop overhead?
-            // Actually, direct access is fast.
-            
-            // We can't iterate PALETTE easily because it's [u8; 768].
-            // Let's make a local copy of colors for matching.
+            // 3. Map Pixels to Palette
             let colors: Vec<[u8; 3]> = (0..p_len).map(|i| {
                 [PALETTE[i*3], PALETTE[i*3+1], PALETTE[i*3+2]]
             }).collect();
 
+            // Check input array bounds before loop
+            let max_idx_check = (pixel_count - 1) * 3 + 2;
+            // log(&format!("Rust: Starting Pixel Mapping. PixelCount={} MaxIdx={}", pixel_count, max_idx_check));
+
             for i in 0..pixel_count {
+                // if i % 500_000 == 0 { log(&format!("Rust: Mapping Pixel {}", i)); }
+
                 let r = RAW_IMAGE_BUFFER[i*3];
                 let g = RAW_IMAGE_BUFFER[i*3+1];
                 let b = RAW_IMAGE_BUFFER[i*3+2];
@@ -146,9 +151,99 @@ impl AudioVisualizer {
                 }
                 PIXELS[i] = best_idx as u8;
             }
+            // log("Rust: Pixel Mapping Complete");
             
             self.render();
+            // log("Rust: Initial Render Complete");
         }
+        
+        // log("Rust: load_image returning");
+    }
+
+    pub fn set_color_count(&self, count: u8) {
+        // log("Rust: set_color_count start");
+        unsafe {
+            let pixel_count = (IMG_WIDTH * IMG_HEIGHT) as usize;
+            if pixel_count == 0 { return; }
+            
+            // 1. Downsample
+            let step = (pixel_count / 4096).max(1);
+            let mut sample_pixels = Vec::with_capacity(4096);
+            
+            for i in (0..pixel_count).step_by(step) {
+                let r = RAW_IMAGE_BUFFER[i*3];
+                let g = RAW_IMAGE_BUFFER[i*3+1];
+                let b = RAW_IMAGE_BUFFER[i*3+2];
+                sample_pixels.push([r, g, b]);
+            }
+
+            // 2. Generate Palette
+            log("Rust: Generating Palette (Median Cut) - SKIPPED DEBUG");
+            // let (palette, _) = median_cut(&sample_pixels, count as usize);
+            // log(&format!("Rust: Palette Generated ({} colors)", palette.len()));
+            
+            // Store to Static Arrays
+            // let p_len = palette.len().min(256);
+            // ACTIVE_PALETTE_LEN = p_len * 3;
+            // for j in 0..p_len {
+            //     let offset = j * 3;
+            //     PALETTE[offset] = palette[j][0];
+            //     PALETTE[offset+1] = palette[j][1];
+            //     PALETTE[offset+2] = palette[j][2];
+            //     
+            //     ORIGINAL_PALETTE[offset] = palette[j][0];
+            //     ORIGINAL_PALETTE[offset+1] = palette[j][1];
+            //     ORIGINAL_PALETTE[offset+2] = palette[j][2];
+            //     
+            //     let (h, s, l) = rgb_to_hsl(palette[j][0], palette[j][1], palette[j][2]);
+            //     PALETTE_HSL[offset] = h;
+            //     PALETTE_HSL[offset+1] = s;
+            //     PALETTE_HSL[offset+2] = l;
+            // }
+
+            // 3. Map Pixels to Palette
+            // Create a temporary slice view for matching to avoid accessing global PALETTE repeatedly in loop overhead?
+            // Actually, direct access is fast.
+            
+            // We can't iterate PALETTE easily because it's [u8; 768].
+            // Let's make a local copy of colors for matching.
+            // let colors: Vec<[u8; 3]> = (0..p_len).map(|i| {
+            //     [PALETTE[i*3], PALETTE[i*3+1], PALETTE[i*3+2]]
+            // }).collect();
+
+            // Check input array bounds before loop
+            // let max_idx_check = (pixel_count - 1) * 3 + 2;
+            // log(&format!("Rust: Starting Pixel Mapping. PixelCount={} MaxIdx={}", pixel_count, max_idx_check));
+
+            // for i in 0..pixel_count {
+            //     if i % 500_000 == 0 { log(&format!("Rust: Mapping Pixel {}", i)); }
+
+            //     let r = RAW_IMAGE_BUFFER[i*3];
+            //     let g = RAW_IMAGE_BUFFER[i*3+1];
+            //     let b = RAW_IMAGE_BUFFER[i*3+2];
+                
+            //     let mut min_dist = std::i32::MAX;
+            //     let mut best_idx = 0;
+                
+            //     for (idx, color) in colors.iter().enumerate() {
+            //         let dr = r as i32 - color[0] as i32;
+            //         let dg = g as i32 - color[1] as i32;
+            //         let db = b as i32 - color[2] as i32;
+            //         let dist = dr*dr + dg*dg + db*db;
+                    
+            //         if dist < min_dist {
+            //             min_dist = dist;
+            //             best_idx = idx;
+            //         }
+            //     }
+            //     PIXELS[i] = best_idx as u8;
+            // }
+            // log("Rust: Pixel Mapping Complete");
+            
+            // self.render();
+            // log("Rust: Initial Render Complete");
+        }
+        
     }
 
     pub fn resize_input_buffer(&self, size: usize) {
@@ -168,14 +263,35 @@ impl AudioVisualizer {
             let len = INPUT_LEN;
             if len == 0 { return 0.0; }
         
-            let palette_colors = ACTIVE_PALETTE_LEN / 3;
+            let active_len = ACTIVE_PALETTE_LEN;
+            let palette_colors = active_len / 3;
             if palette_colors == 0 { return 0.0; }
+            
             
             // Quadratic Scaling (Pseudo-Log) to match human hearing
             // This grants more resolution to low frequencies (Bass) and compresses high frequencies
             let len_f = len as f32;
             let pc_f = palette_colors as f32;
             
+            // NEW: Scan for total silence first to ensure exact restoration (bypass HSL float errors)
+            let mut max_energy_all: u8 = 0;
+            for k in 0..len {
+                 let val = INPUT_BUFFER[k];
+                 if val > max_energy_all { max_energy_all = val; }
+            }
+
+            // Log energy for debugging
+            // log(&format!("Max Energy: {}", max_energy_all));
+
+            if max_energy_all == 0 {
+                // log("Silence detected! Restoring ORIGINAL_PALETTE");
+                // Restore exact original palette
+                for j in 0..active_len {
+                    PALETTE[j] = ORIGINAL_PALETTE[j];
+                }
+                return 0.0;
+            }
+
             for i in 0..palette_colors {
                 let i_f = i as f32;
                 // Formula: bin = len * (i / count)^1.5 (Less aggressive than squared, more coverage)
@@ -198,38 +314,47 @@ impl AudioVisualizer {
                 
                 let energy = max_val as f32 / 255.0;
 
-                // AGC Implementation - Aggressive Tuning for Dynamics
-                // Decay peak fast (drops 10% per frame)
-                BIN_PEAKS[i] *= 0.90; 
-                // Lower floor to 0.005 (1/200) to catch faint highs
-                if BIN_PEAKS[i] < 0.005 { BIN_PEAKS[i] = 0.005; }
-                
-                // Pump peak up if current energy is higher
-                if energy > BIN_PEAKS[i] {
-                    BIN_PEAKS[i] = energy;
-                }
+                // AGC Implementation
+                // Slow down decay significantly (0.90 -> 0.995) to prevent "pumping" on low noise
+                BIN_PEAKS[i] *= 0.995; 
+                // Increase floor to 0.01 to reduce sensitivity to background noise
+                if BIN_PEAKS[i] < 0.01 { BIN_PEAKS[i] = 0.01; }
+                if energy > BIN_PEAKS[i] { BIN_PEAKS[i] = energy; }
                 
                 let normalized = energy / BIN_PEAKS[i];
                 
-                // Non-linear response (Square it) to emphasize beats
-                // Range: 0.5 (quiet) to 1.8 (loud)
-                let effect = 0.5 + (normalized * normalized * 1.3);
-
+                // HSL Modulation Logic
+                // User Requirement: "Zero energy to be the same as the original palette"
+                // So at normalized (or energy) ~ 0, we should have multipliers of 1.0.
+                
+                // We'll use the squared normalized energy to make it punchy on beats.
+                let punch = normalized * normalized; 
+                
                 let base_idx = i * 3;
-                // Bounds check
                 if base_idx + 2 < 768 {
-                    let r_orig = ORIGINAL_PALETTE[base_idx] as f32;
-                    let g_orig = ORIGINAL_PALETTE[base_idx+1] as f32;
-                    let b_orig = ORIGINAL_PALETTE[base_idx+2] as f32;
+                    let h = PALETTE_HSL[base_idx];
+                    let s_orig = PALETTE_HSL[base_idx+1];
+                    let l_orig = PALETTE_HSL[base_idx+2];
                     
-                    // Explicit saturation clamping to prevent wrap-around
-                    let r_new = r_orig * effect;
-                    let g_new = g_orig * effect;
-                    let b_new = b_orig * effect;
+                    // Headroom-aware Lightness Boost
+                    // prevents clipping whites by scaling boost based on remaining headroom
+                    // Reduced boost factor 0.6 -> 0.3 to reduce washout
+                    let headroom = 1.0 - l_orig;
+                    let new_l = l_orig + (headroom * punch * 0.3);
 
-                    PALETTE[base_idx] = if r_new > 255.0 { 255 } else { r_new as u8 };
-                    PALETTE[base_idx+1] = if g_new > 255.0 { 255 } else { g_new as u8 };
-                    PALETTE[base_idx+2] = if b_new > 255.0 { 255 } else { b_new as u8 };
+                    // Saturation Boost
+                    let new_s = (s_orig * (1.0 + punch * 0.4)).min(1.0);
+
+                    // Debug output for first color only (Commented out for production)
+                    // if i == 0 {
+                    //    log(&format!("Bin 0: P={:.2} L_old={:.2} L_new={:.2}", punch, l_orig, new_l));
+                    // }
+
+                    let (r, g, b) = hsl_to_rgb(h, new_s, new_l);
+
+                    PALETTE[base_idx] = r;
+                    PALETTE[base_idx+1] = g;
+                    PALETTE[base_idx+2] = b;
                 }
             }
             
@@ -239,6 +364,7 @@ impl AudioVisualizer {
 
     pub fn render(&self) {
         unsafe {
+            // log("Rust: render() start");
             let pixel_count = (IMG_WIDTH * IMG_HEIGHT) as usize;
             
             for i in 0..pixel_count {
@@ -402,4 +528,67 @@ fn median_cut(pixels: &[[u8; 3]], depth: usize) -> (Vec<[u8; 3]>, Vec<u8>) {
     }
     
     (palette, indices)
+}
+
+// HSL Helper Functions
+fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
+    let r = r as f32 / 255.0;
+    let g = g as f32 / 255.0;
+    let b = b as f32 / 255.0;
+
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let delta = max - min;
+
+    let l = (max + min) / 2.0;
+    let mut h = 0.0;
+    let mut s = 0.0;
+
+    if delta != 0.0 {
+        s = if l > 0.5 { delta / (2.0 - max - min) } else { delta / (max + min) };
+
+        if max == r {
+            h = (g - b) / delta + (if g < b { 6.0 } else { 0.0 });
+        } else if max == g {
+            h = (b - r) / delta + 2.0;
+        } else {
+            h = (r - g) / delta + 4.0;
+        }
+        h /= 6.0;
+    }
+
+    (h, s, l)
+}
+
+fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
+    let r;
+    let g;
+    let b;
+
+    if s == 0.0 {
+        r = l;
+        g = l;
+        b = l;
+    } else {
+        let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+        let p = 2.0 * l - q;
+        r = hue_to_rgb(p, q, h + 1.0 / 3.0);
+        g = hue_to_rgb(p, q, h);
+        b = hue_to_rgb(p, q, h - 1.0 / 3.0);
+    }
+
+    (
+        (r * 255.0).round() as u8,
+        (g * 255.0).round() as u8,
+        (b * 255.0).round() as u8,
+    )
+}
+
+fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
+    if t < 0.0 { t += 1.0; }
+    if t > 1.0 { t -= 1.0; }
+    if t < 1.0 / 6.0 { return p + (q - p) * 6.0 * t; }
+    if t < 1.0 / 2.0 { return q; }
+    if t < 2.0 / 3.0 { return p + (q - p) * (2.0 / 3.0 - t) * 6.0; }
+    p
 }
