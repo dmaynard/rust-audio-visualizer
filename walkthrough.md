@@ -72,3 +72,9 @@ When loading a second, larger image, the app crashed with `RuntimeError: unreach
 ## Next Steps
 - Run the visualizer in the browser.
 - Verify that dark colors don't wash out (L modulation handles this, but black (L=0) stays black).
+
+## Fix: Color Count Buttons (Quantization Logic Restoration)
+Buttons for 16, 32, 64 colors stopped working after the Zero-Copy Refactor because the logic was accidentally commented out during debugging.
+- **Cause**: The `median_cut` and `pixel_mapping` logic in `set_color_count` was disabled to isolate the crash.
+- **Fix**: Restored the logic in `lib.rs` and added safety locking in `Visualizer.tsx` to prevent race conditions during rapid clicks.
+- **Result**: Changing color count now instantly re-quantizes the image.

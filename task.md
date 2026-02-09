@@ -54,6 +54,7 @@
     - [x] Increase Static Buffer Size (Potential Heap Corruption/Overflow?)
     - [x] Binary Search Crash (Disable Mapping/Median Cut)
     - [x] Implement Zero-Copy Upload (Manual Buffer) to fix Wasm Memory Crash
+    - [x] Fix: Color Count Buttons (Quantization Logic Restoration)
 - [x] Documentation
 - [x] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->

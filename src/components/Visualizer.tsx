@@ -33,11 +33,18 @@ export const Visualizer: React.FC = () => {
     const handleColorCountChange = (count: number) => {
         setColorCount(count);
         if (visualizer) {
-            visualizer.set_color_count(count);
-            // Force a re-render of the frame to show new palette immediately
-            // But only if we have an image loaded (width > 0)
-            if (visualizer.get_width() > 0) {
-                renderFrame();
+            try {
+                isImageLoading.current = true;
+                visualizer.set_color_count(count);
+                isImageLoading.current = false;
+
+                // Force a re-render of the frame to show new palette immediately
+                if (visualizer.get_width() > 0) {
+                    renderFrame();
+                }
+            } catch (e) {
+                console.error("Error setting color count:", e);
+                isImageLoading.current = false;
             }
         }
     };

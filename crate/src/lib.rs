@@ -81,81 +81,11 @@ impl AudioVisualizer {
                 RAW_IMAGE_BUFFER[dst_idx + 2] = UPLOAD_BUFFER[src_idx + 2];
             }
         
-            // Sampling for Median Cut
-            let step = 10;
-            let mut sample_pixels = Vec::with_capacity(pixel_count / step);
-            for i in (0..pixel_count).step_by(step) {
-                let r = RAW_IMAGE_BUFFER[i*3];
-                let g = RAW_IMAGE_BUFFER[i*3+1];
-                let b = RAW_IMAGE_BUFFER[i*3+2];
-                sample_pixels.push([r, g, b]);
-            }
-
-            // 2. Generate Palette
-            // log("Rust: Generating Palette (Median Cut)");
-            let (palette, _) = median_cut(&sample_pixels, 64);
-            // log(&format!("Rust: Palette Generated ({} colors)", palette.len()));
-            
-            // Store to Static Arrays
-            let p_len = palette.len().min(256);
-            ACTIVE_PALETTE_LEN = p_len * 3;
-            
-            for (i, c) in palette.iter().take(p_len).enumerate() {
-                PALETTE[i*3] = c[0];
-                PALETTE[i*3+1] = c[1];
-                PALETTE[i*3+2] = c[2];
-                
-                ORIGINAL_PALETTE[i*3] = c[0];
-                ORIGINAL_PALETTE[i*3+1] = c[1];
-                ORIGINAL_PALETTE[i*3+2] = c[2];
-
-                // Convert to HSL and store
-                let (h, s, l) = rgb_to_hsl(c[0], c[1], c[2]);
-                PALETTE_HSL[i*3] = h;
-                PALETTE_HSL[i*3+1] = s;
-                PALETTE_HSL[i*3+2] = l;
-                
-                // Reset peaks
-                BIN_PEAKS[i] = 0.1;
-            }
-
-            // 3. Map Pixels to Palette
-            let colors: Vec<[u8; 3]> = (0..p_len).map(|i| {
-                [PALETTE[i*3], PALETTE[i*3+1], PALETTE[i*3+2]]
-            }).collect();
-
-            // Check input array bounds before loop
-            let max_idx_check = (pixel_count - 1) * 3 + 2;
-            // log(&format!("Rust: Starting Pixel Mapping. PixelCount={} MaxIdx={}", pixel_count, max_idx_check));
-
-            for i in 0..pixel_count {
-                // if i % 500_000 == 0 { log(&format!("Rust: Mapping Pixel {}", i)); }
-
-                let r = RAW_IMAGE_BUFFER[i*3];
-                let g = RAW_IMAGE_BUFFER[i*3+1];
-                let b = RAW_IMAGE_BUFFER[i*3+2];
-                
-                let mut min_dist = std::i32::MAX;
-                let mut best_idx = 0;
-                
-                for (idx, color) in colors.iter().enumerate() {
-                    let dr = r as i32 - color[0] as i32;
-                    let dg = g as i32 - color[1] as i32;
-                    let db = b as i32 - color[2] as i32;
-                    let dist = dr*dr + dg*dg + db*db;
-                    
-                    if dist < min_dist {
-                        min_dist = dist;
-                        best_idx = idx;
-                    }
-                }
-                PIXELS[i] = best_idx as u8;
-            }
-            // log("Rust: Pixel Mapping Complete");
-            
-            self.render();
-            // log("Rust: Initial Render Complete");
+            // 2. Generate Palette (Delegated to set_color_count)
+            // log("Rust: Stored Raw Image. Delegating to set_color_count.");
         }
+        
+        self.set_color_count(64);
         
         // log("Rust: load_image returning");
     }
@@ -178,28 +108,29 @@ impl AudioVisualizer {
             }
 
             // 2. Generate Palette
-            log("Rust: Generating Palette (Median Cut) - SKIPPED DEBUG");
-            // let (palette, _) = median_cut(&sample_pixels, count as usize);
+            // log("Rust: Generating Palette (Median Cut)");
+            let (palette, _) = median_cut(&sample_pixels, count as usize);
             // log(&format!("Rust: Palette Generated ({} colors)", palette.len()));
             
             // Store to Static Arrays
-            // let p_len = palette.len().min(256);
-            // ACTIVE_PALETTE_LEN = p_len * 3;
-            // for j in 0..p_len {
-            //     let offset = j * 3;
-            //     PALETTE[offset] = palette[j][0];
-            //     PALETTE[offset+1] = palette[j][1];
-            //     PALETTE[offset+2] = palette[j][2];
-            //     
-            //     ORIGINAL_PALETTE[offset] = palette[j][0];
-            //     ORIGINAL_PALETTE[offset+1] = palette[j][1];
-            //     ORIGINAL_PALETTE[offset+2] = palette[j][2];
-            //     
-            //     let (h, s, l) = rgb_to_hsl(palette[j][0], palette[j][1], palette[j][2]);
-            //     PALETTE_HSL[offset] = h;
-            //     PALETTE_HSL[offset+1] = s;
-            //     PALETTE_HSL[offset+2] = l;
-            // }
+            let p_len = palette.len().min(256);
+            ACTIVE_PALETTE_LEN = p_len * 3;
+            for (i, c) in palette.iter().take(p_len).enumerate() {
+                PALETTE[i*3] = c[0];
+                PALETTE[i*3+1] = c[1];
+                PALETTE[i*3+2] = c[2];
+                
+                ORIGINAL_PALETTE[i*3] = c[0];
+                ORIGINAL_PALETTE[i*3+1] = c[1];
+                ORIGINAL_PALETTE[i*3+2] = c[2];
+
+                let (h, s, l) = rgb_to_hsl(c[0], c[1], c[2]);
+                PALETTE_HSL[i*3] = h;
+                PALETTE_HSL[i*3+1] = s;
+                PALETTE_HSL[i*3+2] = l;
+                
+                BIN_PEAKS[i] = 0.01;
+            }
 
             // 3. Map Pixels to Palette
             // Create a temporary slice view for matching to avoid accessing global PALETTE repeatedly in loop overhead?
@@ -207,41 +138,41 @@ impl AudioVisualizer {
             
             // We can't iterate PALETTE easily because it's [u8; 768].
             // Let's make a local copy of colors for matching.
-            // let colors: Vec<[u8; 3]> = (0..p_len).map(|i| {
-            //     [PALETTE[i*3], PALETTE[i*3+1], PALETTE[i*3+2]]
-            // }).collect();
+            let colors: Vec<[u8; 3]> = (0..p_len).map(|i| {
+                [PALETTE[i*3], PALETTE[i*3+1], PALETTE[i*3+2]]
+            }).collect();
 
             // Check input array bounds before loop
-            // let max_idx_check = (pixel_count - 1) * 3 + 2;
-            // log(&format!("Rust: Starting Pixel Mapping. PixelCount={} MaxIdx={}", pixel_count, max_idx_check));
+            let max_idx_check = (pixel_count - 1) * 3 + 2;
+            log(&format!("Rust: Starting Pixel Mapping. PixelCount={} MaxIdx={}", pixel_count, max_idx_check));
 
-            // for i in 0..pixel_count {
-            //     if i % 500_000 == 0 { log(&format!("Rust: Mapping Pixel {}", i)); }
+            for i in 0..pixel_count {
+                if i % 500_000 == 0 { log(&format!("Rust: Mapping Pixel {}", i)); }
 
-            //     let r = RAW_IMAGE_BUFFER[i*3];
-            //     let g = RAW_IMAGE_BUFFER[i*3+1];
-            //     let b = RAW_IMAGE_BUFFER[i*3+2];
+                let r = RAW_IMAGE_BUFFER[i*3];
+                let g = RAW_IMAGE_BUFFER[i*3+1];
+                let b = RAW_IMAGE_BUFFER[i*3+2];
                 
-            //     let mut min_dist = std::i32::MAX;
-            //     let mut best_idx = 0;
+                let mut min_dist = std::i32::MAX;
+                let mut best_idx = 0;
                 
-            //     for (idx, color) in colors.iter().enumerate() {
-            //         let dr = r as i32 - color[0] as i32;
-            //         let dg = g as i32 - color[1] as i32;
-            //         let db = b as i32 - color[2] as i32;
-            //         let dist = dr*dr + dg*dg + db*db;
+                for (idx, color) in colors.iter().enumerate() {
+                    let dr = r as i32 - color[0] as i32;
+                    let dg = g as i32 - color[1] as i32;
+                    let db = b as i32 - color[2] as i32;
+                    let dist = dr*dr + dg*dg + db*db;
                     
-            //         if dist < min_dist {
-            //             min_dist = dist;
-            //             best_idx = idx;
-            //         }
-            //     }
-            //     PIXELS[i] = best_idx as u8;
-            // }
-            // log("Rust: Pixel Mapping Complete");
+                    if dist < min_dist {
+                        min_dist = dist;
+                        best_idx = idx;
+                    }
+                }
+                PIXELS[i] = best_idx as u8;
+            }
+            log("Rust: Pixel Mapping Complete");
             
-            // self.render();
-            // log("Rust: Initial Render Complete");
+            self.render();
+            log("Rust: Initial Render Complete");
         }
         
     }
