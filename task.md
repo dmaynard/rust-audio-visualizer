@@ -55,6 +55,14 @@
     - [x] Binary Search Crash (Disable Mapping/Median Cut)
     - [x] Implement Zero-Copy Upload (Manual Buffer) to fix Wasm Memory Crash
     - [x] Fix: Color Count Buttons (Quantization Logic Restoration)
+- [x] Implement Microphone Support
+    - [x] Create Microphone Toggle Button
+    - [x] Implement `getUserData` for Audio Stream
+    - [x] Handle Audio Context Switching (File vs Mic)
+    - [x] Auto-pause file playback when Mic is active
+    - [x] Implement Microphone Device Selection (Fix for Continuity Camera issues)
+- [x] Add Test Audio Files
+    - [x] Generate 20Hz-20kHz Logarithmic Stereo Sweep (`public/sweep_stereo.wav`)
 - [x] Documentation
 - [x] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->

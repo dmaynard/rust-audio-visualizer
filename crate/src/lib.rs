@@ -225,9 +225,10 @@ impl AudioVisualizer {
 
             for i in 0..palette_colors {
                 let i_f = i as f32;
-                // Formula: bin = len * (i / count)^1.5 (Less aggressive than squared, more coverage)
-                let start_ratio = (i_f / pc_f).powf(1.5);
-                let end_ratio = ((i_f + 1.0) / pc_f).powf(1.5);
+                // Formula: bin = len * (i / count)^1.8 (Steeper curve to separate bass/mids more)
+                let pc_f = palette_colors as f32;
+                let start_ratio = (i_f / pc_f).powf(1.8);
+                let end_ratio = ((i_f + 1.0) / pc_f).powf(1.8);
                 
                 let start_bin = (start_ratio * len_f) as usize;
                 let end_bin = (end_ratio * len_f) as usize;
@@ -243,16 +244,19 @@ impl AudioVisualizer {
                     if val > max_val { max_val = val; }
                 }
                 
-                let energy = max_val as f32 / 255.0;
+                let mut energy = max_val as f32 / 255.0;
+
+                // Noise Gate: Cut low-level broadband noise which causes "all-on" look
+                if energy < 0.03 { energy = 0.0; }
 
                 // AGC Implementation
                 // Slow down decay significantly (0.90 -> 0.995) to prevent "pumping" on low noise
                 BIN_PEAKS[i] *= 0.995; 
-                // Increase floor to 0.01 to reduce sensitivity to background noise
-                if BIN_PEAKS[i] < 0.01 { BIN_PEAKS[i] = 0.01; }
+                // Increase floor to 0.03 to match noise gate
+                if BIN_PEAKS[i] < 0.03 { BIN_PEAKS[i] = 0.03; }
                 if energy > BIN_PEAKS[i] { BIN_PEAKS[i] = energy; }
                 
-                let normalized = energy / BIN_PEAKS[i];
+                let normalized = if BIN_PEAKS[i] > 0.0 { energy / BIN_PEAKS[i] } else { 0.0 };
                 
                 // HSL Modulation Logic
                 // User Requirement: "Zero energy to be the same as the original palette"

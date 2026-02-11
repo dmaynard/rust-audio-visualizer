@@ -78,3 +78,17 @@ Buttons for 16, 32, 64 colors stopped working after the Zero-Copy Refactor becau
 - **Cause**: The `median_cut` and `pixel_mapping` logic in `set_color_count` was disabled to isolate the crash.
 - **Fix**: Restored the logic in `lib.rs` and added safety locking in `Visualizer.tsx` to prevent race conditions during rapid clicks.
 - **Result**: Changing color count now instantly re-quantizes the image.
+
+## Feature: Microphone Integration
+Added a "Start Mic" button to visualize live audio input.
+- **Implementation**: Uses `navigator.mediaDevices.getUserMedia` to create a `MediaStreamSourceNode`.
+- **Switching**: Automatically pauses file playback when mic is activated, and stops mic when file playback is requested.
+- **Feedback Loop Prevention**: The mic source is connected *only* to the `AnalyserNode`, not the `destination` (speakers), to prevent audio feedback.
+- **Device Selection**: Added a dropdown to explicitly select the input device (fixing generic "Default" device issues on macOS/iOS).
+
+## Test Audio
+- Generated a **Stereo 20Hz-20kHz Logarithmic Sweep** (`public/sweep_stereo.wav`) to verify frequency response and channel mapping.
+- This file allows confirming that:
+    - Low frequencies (20Hz) map to the left/beginning of the palette.
+    - High frequencies (20kHz) map to the right/end.
+    - Stereo playback works correctly.

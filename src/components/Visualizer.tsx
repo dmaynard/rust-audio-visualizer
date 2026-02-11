@@ -9,7 +9,7 @@ export const Visualizer: React.FC = () => {
 
     const [visualizer, setVisualizer] = useState<AudioVisualizer | null>(null);
     const [wasmMemory, setWasmMemory] = useState<WebAssembly.Memory | null>(null);
-    const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+    const sourceRef = useRef<AudioBufferSourceNode | MediaStreamAudioSourceNode | null>(null);
     const audioBufferRef = useRef<AudioBuffer | null>(null);
 
     // Playback state
@@ -26,9 +26,130 @@ export const Visualizer: React.FC = () => {
     // Ref to track playing state inside requestAnimationFrame loop without stale closure
     const isPlayingRef = useRef(false);
 
+    // Use ref for mic stream to handle cleanup without re-renders affecting it immediately
+    const micStreamRef = useRef<MediaStream | null>(null);
+    const [isMicActive, setIsMicActive] = useState(false);
+
+    // Microphone Selection
+    interface AudioDevice {
+        deviceId: string;
+        label: string;
+    }
+    const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+
     useEffect(() => {
-        isPlayingRef.current = isPlaying;
-    }, [isPlaying]);
+        // Animation should run if File Playing OR Mic Active
+        isPlayingRef.current = isPlaying || isMicActive;
+
+        // If we became active and loop isn't running, start it
+        if ((isPlaying || isMicActive) && !animationFrameRef.current) {
+            animate();
+        }
+    }, [isPlaying, isMicActive]);
+
+    // Fetch Audio Devices on Mount
+    useEffect(() => {
+        const fetchDevices = async () => {
+            try {
+                // Check permission first (optional, but helps get labels)
+                // await navigator.mediaDevices.getUserMedia({ audio: true }); 
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices
+                    .filter(device => device.kind === 'audioinput')
+                    .map(device => ({
+                        deviceId: device.deviceId,
+                        label: device.label || `Microphone ${device.deviceId.slice(0, 5)}...`
+                    }));
+
+                setAudioDevices(audioInputs);
+                if (audioInputs.length > 0 && !selectedDeviceId) {
+                    setSelectedDeviceId(audioInputs[0].deviceId);
+                }
+            } catch (e) {
+                console.error("Error fetching audio devices:", e);
+            }
+        };
+        fetchDevices();
+
+        // Listen for device changes
+        navigator.mediaDevices.addEventListener('devicechange', fetchDevices);
+        return () => navigator.mediaDevices.removeEventListener('devicechange', fetchDevices);
+    }, []);
+
+    const isTogglingRef = useRef(false);
+
+    const toggleMic = async () => {
+        if (isTogglingRef.current) return;
+        isTogglingRef.current = true;
+        console.log("Visualizer: toggleMic called. Current state:", isMicActive);
+
+        try {
+            if (isMicActive) {
+                // STOP MIC
+                console.log("Visualizer: Stopping Mic");
+                if (micStreamRef.current) {
+                    micStreamRef.current.getTracks().forEach(track => track.stop());
+                    micStreamRef.current = null;
+                }
+                stopAudio(); // Disconnects source and stops sourceRef
+                setIsMicActive(false);
+            } else {
+                // START MIC
+                console.log("Visualizer: Starting Mic");
+                // Request Mic Permission with specific device if selected
+                const constraints = {
+                    audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log("Visualizer: Mic Stream acquired:", stream.id);
+                micStreamRef.current = stream;
+
+                // Ensure Audio Context is Ready
+                if (!audioContextRef.current) {
+                    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                }
+                if (audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume();
+                }
+
+                // Stop any file playback
+                if (isPlaying) {
+                    pauseAudio();
+                } else {
+                    stopAudio();
+                }
+
+                const ctx = audioContextRef.current;
+                const source = ctx.createMediaStreamSource(stream);
+
+                if (!analyserRef.current) {
+                    const analyser = ctx.createAnalyser();
+                    analyser.fftSize = 256;
+                    analyserRef.current = analyser;
+                }
+
+                source.connect(analyserRef.current);
+                // DO NOT connect to destination (speakers) to avoid feedback!
+
+                sourceRef.current = source;
+
+                if (visualizer) {
+                    visualizer.resize_input_buffer(analyserRef.current.frequencyBinCount);
+                }
+
+                setIsMicActive(true);
+                animate();
+            }
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            alert("Could not access microphone. See console.");
+        } finally {
+            isTogglingRef.current = false;
+        }
+    };
 
     const handleColorCountChange = (count: number) => {
         setColorCount(count);
@@ -68,7 +189,12 @@ export const Visualizer: React.FC = () => {
 
     const stopAudio = () => {
         if (sourceRef.current) {
-            sourceRef.current.stop();
+            // Check if source has a stop method (BufferSource) vs StreamSource
+            if ('stop' in sourceRef.current) {
+                try {
+                    (sourceRef.current as AudioBufferSourceNode).stop();
+                } catch (e) { /* ignore */ }
+            }
             sourceRef.current.disconnect();
             sourceRef.current = null;
         }
@@ -235,6 +361,16 @@ export const Visualizer: React.FC = () => {
 
     const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || !e.target.files[0]) return;
+
+        // If Mic is active, stop it
+        if (isMicActive) {
+            if (micStreamRef.current) {
+                micStreamRef.current.getTracks().forEach(track => track.stop());
+                micStreamRef.current = null;
+            }
+            setIsMicActive(false);
+        }
+
         const file = e.target.files[0];
         const buffer = await file.arrayBuffer();
 
@@ -283,7 +419,10 @@ export const Visualizer: React.FC = () => {
         if (!analyserRef.current || !visualizer || !wasmMemory) return;
 
         // Stop loop if not playing (checked via Ref to avoid stale closure)
-        if (!isPlayingRef.current) return;
+        if (!isPlayingRef.current) {
+            animationFrameRef.current = 0;
+            return;
+        }
 
         const bufferLength = analyserRef.current.frequencyBinCount;
 
@@ -336,16 +475,41 @@ export const Visualizer: React.FC = () => {
                     <input type="file" accept="audio/*" onChange={handleAudioUpload} hidden />
                 </label>
             </div>
-            {hasAudio && (
-                <div className="playback-controls">
-                    <button className="control-btn" onClick={rewindAudio}>⏮ Rewind</button>
-                    {!isPlaying ? (
-                        <button className="control-btn" onClick={playAudio}>▶ Play</button>
-                    ) : (
-                        <button className="control-btn" onClick={pauseAudio}>⏸ Pause</button>
-                    )}
-                </div>
-            )}
+            <div className="playback-controls" style={{ marginTop: '10px' }}>
+                {hasAudio && (
+                    <>
+                        <button className="control-btn" onClick={rewindAudio}>⏮ Rewind</button>
+                        {!isPlaying ? (
+                            <button className="control-btn" onClick={playAudio}>▶ Play</button>
+                        ) : (
+                            <button className="control-btn" onClick={pauseAudio}>⏸ Pause</button>
+                        )}
+                    </>
+                )}
+
+                <button
+                    className="control-btn"
+                    onClick={toggleMic}
+                    style={{ backgroundColor: isMicActive ? '#e74c3c' : '', marginLeft: hasAudio ? '10px' : '0' }}
+                >
+                    {isMicActive ? "⏹ Stop Mic" : "🎤 Start Mic"}
+                </button>
+
+                {audioDevices.length > 0 && (
+                    <select
+                        style={{ marginLeft: '10px', padding: '5px' }}
+                        value={selectedDeviceId}
+                        onChange={(e) => setSelectedDeviceId(e.target.value)}
+                        disabled={isMicActive}
+                    >
+                        {audioDevices.map(device => (
+                            <option key={device.deviceId} value={device.deviceId}>
+                                {device.label}
+                            </option>
+                        ))}
+                    </select>
+                )}
+            </div>
 
             <div className="settings-panel" style={{ marginTop: '10px', marginBottom: '10px' }}>
                 <span style={{ marginRight: '10px', fontWeight: 'bold' }}>Colors:</span>

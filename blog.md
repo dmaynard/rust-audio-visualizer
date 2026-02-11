@@ -32,3 +32,19 @@ Encountered Node.js v8.11.2. Requiring update to Node 18+ for Vite. Blocked on u
     - Modulated `Lightness` and `Saturation` based on audio energy.
     - 1.0 Baseline: Silence (energy=0) now restores the exact original image colors.
 - **Status**: Implemented in Rust core on `feature/hsl-palette-animation`. Verified build.
+
+## 2026-02-09: Microphone Integration
+- **Goal**: Allow real-time visualization of environmental audio.
+- **Implementation**: Added `navigator.mediaDevices.getUserMedia` support to `Visualizer.tsx`.
+- **Features**: 
+    - Toggle button for Mic.
+    - Automatic audio source switching (File <-> Mic).
+    - Feedback prevention (Mic not connected to speakers).
+    - **Device Selection**: Address macOS Continuity Camera issues.
+
+## 2026-02-09: Frequency Response Tuning & Testing
+- **Goal**: Fix "illusion" of coupled frequency response.
+- **Fix**: 
+    - **Steeper Mapping**: Changed frequency bin mapping curve from `pow(1.5)` to `pow(1.8)` to separate bass/mids better.
+    - **Noise Gate**: Added `0.03` energy threshold to ignore broadband background noise.
+- **Validation**: Generated `sweep_stereo.wav` (20Hz-20kHz Log Sweep) to visually confirm frequency separation.
