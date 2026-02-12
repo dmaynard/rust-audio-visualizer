@@ -430,24 +430,88 @@ export const Visualizer: React.FC = () => {
         canvasRef.current.height = visualizer.get_height();
     };
 
+    const [viewMode, setViewMode] = useState<'image' | 'equalizer'>('image');
+    const viewModeRef = useRef<'image' | 'equalizer'>('image');
+
+    // Sync Ref
+    useEffect(() => {
+        viewModeRef.current = viewMode;
+        // Trigger manual render when mode changes (for paused state)
+        if (visualizer && wasmMemory) {
+            renderFrame();
+        }
+    }, [viewMode, visualizer, wasmMemory]);
+
+    const renderEqualizer = () => {
+        if (!visualizer || !canvasRef.current || !wasmMemory) return;
+        const ctx = canvasRef.current.getContext('2d');
+        if (!ctx) return;
+
+        const width = canvasRef.current.width;
+        const height = canvasRef.current.height;
+
+        // Clear canvas for fresh draw
+        ctx.fillStyle = "#111"; // Dark background
+        ctx.fillRect(0, 0, width, height);
+
+        const spectrumPtr = visualizer.get_spectrum_ptr();
+        const palettePtr = visualizer.get_palette_ptr();
+
+        // We have `colorCount` bins (e.g. 64, 128, 256)
+        // Access raw memory
+        const spectrum = new Float32Array(wasmMemory.buffer, spectrumPtr, colorCount);
+        const palette = new Uint8Array(wasmMemory.buffer, palettePtr, colorCount * 3);
+
+        const barWidth = width / colorCount;
+
+        for (let i = 0; i < colorCount; i++) {
+            const energy = spectrum[i]; // 0.0 to 1.0 (approx)
+            const barHeight = energy * height * 0.8; // Scale to 80% height
+
+            const r = palette[i * 3];
+            const g = palette[i * 3 + 1];
+            const b = palette[i * 3 + 2];
+
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+
+            // Draw bar from bottom
+            ctx.fillRect(
+                i * barWidth,
+                height - barHeight,
+                barWidth - 1, // -1 for gap
+                barHeight
+            );
+        }
+    };
+
     const renderFrame = () => {
         if (!visualizer || !canvasRef.current || !wasmMemory) return;
         // visualizer.render() is called inside animate for audio, or manually for static image
 
-        const width = visualizer.get_width();
-        const height = visualizer.get_height();
-        if (width === 0 || height === 0) return;
+        if (viewModeRef.current === 'image') {
+            const width = visualizer.get_width();
+            const height = visualizer.get_height();
+            if (width === 0 || height === 0) return;
 
-        const bufferPtr = visualizer.get_display_buffer_ptr();
-        const len = visualizer.get_display_buffer_len();
+            const bufferPtr = visualizer.get_display_buffer_ptr();
+            const len = visualizer.get_display_buffer_len();
 
-        const memBuffer = new Uint8Array(wasmMemory.buffer);
-        const imageBuffer = new Uint8ClampedArray(memBuffer.subarray(bufferPtr, bufferPtr + len));
-        const imageData = new ImageData(imageBuffer, width, height);
+            const memBuffer = new Uint8Array(wasmMemory.buffer);
+            const imageBuffer = new Uint8ClampedArray(memBuffer.subarray(bufferPtr, bufferPtr + len));
+            const imageData = new ImageData(imageBuffer, width, height);
 
-        const ctx = canvasRef.current.getContext('2d');
-        if (ctx) {
-            ctx.putImageData(imageData, 0, 0);
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+                // Ensure canvas size matches image size (it should already)
+                // ctx.putImageData(imageData, 0, 0); 
+                // Draw image scaled to canvas if needed, but putImageData is 1:1.
+                // If viewMode changed, canvas size might be different? 
+                // We should keep canvas size = image size for image mode. 
+                // For equalizer mode, we can use same canvas size.
+                ctx.putImageData(imageData, 0, 0);
+            }
+        } else {
+            renderEqualizer();
         }
     };
 
@@ -529,6 +593,14 @@ export const Visualizer: React.FC = () => {
                     style={{ backgroundColor: isMicActive ? '#e74c3c' : '', marginLeft: hasAudio ? '10px' : '0' }}
                 >
                     {isMicActive ? "⏹ Stop Mic" : "🎤 Start Mic"}
+                </button>
+
+                <button
+                    className="control-btn"
+                    onClick={() => setViewMode(prev => prev === 'image' ? 'equalizer' : 'image')}
+                    style={{ marginLeft: '10px' }}
+                >
+                    {viewMode === 'image' ? "📊 Chart" : "🖼️ Image"}
                 </button>
 
                 {audioDevices.length > 0 && (

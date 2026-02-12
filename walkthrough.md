@@ -95,5 +95,9 @@ Added a "Start Mic" button to visualize live audio input.
 
 ## Default Assets
 - On startup, the app now automatically loads:
-    - **Image**: `FlammarionColor.png`
-    - **Audio**: `Chopin_-_Polonaise...` (paused by default to respect autoplay policies).
+## Equalizer Mode
+- **Hybrid Rendering**:
+    - **Rust**: Calculates frequency energy (`BIN_PEAKS`) and modulated colors (`PALETTE`).
+    - **JavaScript**: Reads raw data from WASM memory (Zero-Copy) and renders the bar chart on HTML5 Canvas.
+- **Toggle**: Switch instantly between "Image" and "Chart" views using the UI button.
+- **Synchronization**: Bars are colored exactly like the corresponding palette entry in the image.

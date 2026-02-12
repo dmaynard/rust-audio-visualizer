@@ -64,6 +64,9 @@
 - [x] Add Test Audio Files
     - [x] Generate 20Hz-20kHz Logarithmic Stereo Sweep (`public/sweep_stereo.wav`)
 - [x] Load Default Assets (Flammarion Image & Chopin Audio)
+- [x] Implement Equalizer Mode
+    - [x] Update `lib.rs`: Expose `get_spectrum_ptr` (BIN_PEAKS) and `get_palette_ptr` (Colors)
+    - [x] Update `Visualizer.tsx`: Add Toggle Button & 2nd Render Mode
 - [x] Documentation
 - [x] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->

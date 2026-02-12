@@ -49,3 +49,11 @@ Encountered Node.js v8.11.2. Requiring update to Node 18+ for Vite. Blocked on u
     - **Noise Gate**: Added `0.03` energy threshold to ignore broadband background noise.
 - **Validation**: Generated `sweep_stereo.wav` (20Hz-20kHz Log Sweep) to visually confirm frequency separation.
 - **Assets**: Configured `FlammarionColor.png` and Chopin audio to load automatically on startup.
+- **Assets**: Configured `FlammarionColor.png` and Chopin audio to load automatically on startup.
+
+## 2026-02-11: Equalizer Mode (Hybrid Rendering)
+- **Feature**: Added a bar chart view to visualize the raw frequency data driving the image.
+- **Architecture**:
+    - **Rust**: Performs FFT and color modulation. Exposes `BIN_PEAKS` (f32) and `PALETTE` (u8) via pointers.
+    - **JavaScript**: Reads memory directly (Zero-Copy) and renders bars using HTML5 Canvas.
+- **Optimization**: Used `useRef` to fix stale closure bugs in the animation loop, ensuring instant view toggling.

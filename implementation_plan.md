@@ -51,3 +51,13 @@ Improve the visualizer's color dynamics by processing palette animation in HSL (
 
 ### Automated Tests
 - None planned for this visual effect, as it relies on subjective "look and feel".
+
+## Equalizer Mode Implementation
+- **Goal**: Add a bar chart view driven by the same data as the image.
+- **Rust (`lib.rs`)**:
+    - [NEW] `get_spectrum_ptr()`: Expose `BIN_PEAKS` (f32 values 0.0-1.0).
+    - [NEW] `get_palette_ptr()`: Expose modulated `PALETTE` (u8 RGB triplets).
+- **TypeScript (`Visualizer.tsx`)**:
+    - [NEW] `viewMode` state ('image' | 'equalizer').
+    - [NEW] `drawEqualizer()`: Loop through palette bins, draw bar with height `spectrum[i] * H` and color `palette[i]`.
+    - [UI] Toggle Button: "Chart" vs "Image".

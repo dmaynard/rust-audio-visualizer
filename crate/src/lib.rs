@@ -333,6 +333,14 @@ impl AudioVisualizer {
     pub fn get_height(&self) -> u32 {
         unsafe { IMG_HEIGHT }
     }
+
+    pub fn get_spectrum_ptr(&self) -> *const f32 {
+        unsafe { BIN_PEAKS.as_ptr() }
+    }
+
+    pub fn get_palette_ptr(&self) -> *const u8 {
+        unsafe { PALETTE.as_ptr() }
+    }
 }
 
 // Median Cut Implementation
