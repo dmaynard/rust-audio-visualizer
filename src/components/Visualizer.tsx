@@ -286,24 +286,17 @@ export const Visualizer: React.FC = () => {
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || !e.target.files[0] || !visualizer) return;
-        const file = e.target.files[0];
-
-        // Use Image API to load and resize in JS (avoids WASM OOM)
+    // Helper: Process Image from URL (Blob or String)
+    const processImage = (url: string) => {
         const img = new Image();
-        const url = URL.createObjectURL(file);
-
         img.onload = () => {
-            URL.revokeObjectURL(url);
-
             // Calculate dimensions satisfying max 1600x1200
             const MAX_W = 1600;
             const MAX_H = 1200;
             let w = img.width;
             let h = img.height;
 
-            // Lanczos-like scaling logic (simplified aspect ratio preservation)
+            // Lanczos-like scaling logic
             const scale = Math.min(1.0, Math.min(MAX_W / w, MAX_H / h));
             w = Math.floor(w * scale);
             h = Math.floor(h * scale);
@@ -348,15 +341,46 @@ export const Visualizer: React.FC = () => {
 
             } catch (err) {
                 console.error("Error loading image:", err);
-                alert("Error loading image. Check console.");
-                isImageLoading.current = false; // Ensure we reset flag even on error
+                // alert("Error loading image. Check console."); 
+                // Suppress alert for default load, log only
+                isImageLoading.current = false;
             }
         };
         img.onerror = () => {
-            URL.revokeObjectURL(url);
-            alert("Failed to load image");
+            console.error("Failed to load image url:", url);
         };
         img.src = url;
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || !e.target.files[0] || !visualizer) return;
+        const file = e.target.files[0];
+        const url = URL.createObjectURL(file);
+        processImage(url);
+        // Note: We don't revokeObjectURL here inside the helper because we might need it for defaults? 
+        // Actually, for file uploads we should revoke. 
+        // Modified processImage to NOT revoke. Caller handles it? 
+        // Or just let GC handle it for now.
+    };
+
+    // Helper: Process Audio Buffer
+    const processAudio = async (buffer: ArrayBuffer) => {
+        if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+
+        const ctx = audioContextRef.current;
+        try {
+            const audioBuffer = await ctx.decodeAudioData(buffer);
+            audioBufferRef.current = audioBuffer;
+
+            setHasAudio(true);
+            setPausedAt(0);
+            setStartTime(0);
+            // playAudio(); // Don't auto-play defaults to avoid permission errors
+        } catch (e) {
+            console.error("Error decoding audio:", e);
+        }
     };
 
     const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -364,6 +388,7 @@ export const Visualizer: React.FC = () => {
 
         // If Mic is active, stop it
         if (isMicActive) {
+
             if (micStreamRef.current) {
                 micStreamRef.current.getTracks().forEach(track => track.stop());
                 micStreamRef.current = null;
@@ -373,20 +398,31 @@ export const Visualizer: React.FC = () => {
 
         const file = e.target.files[0];
         const buffer = await file.arrayBuffer();
-
-        if (!audioContextRef.current) {
-            audioContextRef.current = new AudioContext();
-        }
-
-        const ctx = audioContextRef.current;
-        const audioBuffer = await ctx.decodeAudioData(buffer);
-        audioBufferRef.current = audioBuffer;
-
-        setHasAudio(true);
-        setPausedAt(0);
-        setStartTime(0);
-        playAudio();
+        await processAudio(buffer);
+        playAudio(); // Auto-play for user uploads
     };
+
+    // Load Defaults Once WASM is Ready
+    useEffect(() => {
+        if (visualizer && wasmMemory) {
+            const loadDefaults = async () => {
+                // Load Image
+                processImage("FlammarionColor.png");
+
+                // Load Audio
+                try {
+                    const response = await fetch("Chopin_-_Polonaise_in_A_Op-40_No-1_(Military)_(Piano_Performance_by_eldüendesüarez).mp3");
+                    if (response.ok) {
+                        const buffer = await response.arrayBuffer();
+                        await processAudio(buffer);
+                    }
+                } catch (e) {
+                    console.error("Failed to load default audio:", e);
+                }
+            };
+            loadDefaults();
+        }
+    }, [visualizer, wasmMemory]);
 
     const resizeCanvas = () => {
         if (!visualizer || !canvasRef.current) return;

@@ -92,3 +92,8 @@ Added a "Start Mic" button to visualize live audio input.
     - Low frequencies (20Hz) map to the left/beginning of the palette.
     - High frequencies (20kHz) map to the right/end.
     - Stereo playback works correctly.
+
+## Default Assets
+- On startup, the app now automatically loads:
+    - **Image**: `FlammarionColor.png`
+    - **Audio**: `Chopin_-_Polonaise...` (paused by default to respect autoplay policies).

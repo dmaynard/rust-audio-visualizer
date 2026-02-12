@@ -48,3 +48,4 @@ Encountered Node.js v8.11.2. Requiring update to Node 18+ for Vite. Blocked on u
     - **Steeper Mapping**: Changed frequency bin mapping curve from `pow(1.5)` to `pow(1.8)` to separate bass/mids better.
     - **Noise Gate**: Added `0.03` energy threshold to ignore broadband background noise.
 - **Validation**: Generated `sweep_stereo.wav` (20Hz-20kHz Log Sweep) to visually confirm frequency separation.
+- **Assets**: Configured `FlammarionColor.png` and Chopin audio to load automatically on startup.

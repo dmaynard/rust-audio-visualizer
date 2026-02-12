@@ -63,6 +63,7 @@
     - [x] Implement Microphone Device Selection (Fix for Continuity Camera issues)
 - [x] Add Test Audio Files
     - [x] Generate 20Hz-20kHz Logarithmic Stereo Sweep (`public/sweep_stereo.wav`)
+- [x] Load Default Assets (Flammarion Image & Chopin Audio)
 - [x] Documentation
 - [x] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->
