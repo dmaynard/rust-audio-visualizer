@@ -101,3 +101,8 @@ Added a "Start Mic" button to visualize live audio input.
     - **JavaScript**: Reads raw data from WASM memory (Zero-Copy) and renders the bar chart on HTML5 Canvas.
 - **Toggle**: Switch instantly between "Image" and "Chart" views using the UI button.
 - **Synchronization**: Bars are colored exactly like the corresponding palette entry in the image.
+
+## Fix: Low Frequency Resolution
+- **Issue**: In 64-color mode, the first few frequency bands were identical due to low FFT resolution (`fftSize=256` -> 128 bins).
+- **Fix**: Increased `fftSize` to `2048` (1024 bins).
+- **Result**: Bass frequencies are now distinct and high-resolution, even with few color bands. Performance remains excellent (60fps).

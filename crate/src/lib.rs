@@ -128,7 +128,10 @@ impl AudioVisualizer {
                 PALETTE_HSL[i*3] = h;
                 PALETTE_HSL[i*3+1] = s;
                 PALETTE_HSL[i*3+2] = l;
-                
+            }
+
+            // Clear BIN_PEAKS entirely to avoid stale data from previous palette size
+            for i in 0..256 {
                 BIN_PEAKS[i] = 0.01;
             }
 

@@ -70,5 +70,10 @@
 - [x] Documentation
 - [x] Documentation
     - [x] Create and Maintain `blog.md` <!-- id: 17 -->
+- [ ] Deployment (Next Session)
+    - [ ] Push local branch `feature/hsl-palette-animation` to GitHub
+    - [ ] Create Pull Request
+    - [ ] Merge into `main`
+    - [ ] Configure Netlify Hosting for `main` branch
 - [ ] Deployment
     - [ ] Configure Netlify or GitHub Pages <!-- id: 18 -->

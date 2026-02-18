@@ -127,7 +127,7 @@ export const Visualizer: React.FC = () => {
 
                 if (!analyserRef.current) {
                     const analyser = ctx.createAnalyser();
-                    analyser.fftSize = 256;
+                    analyser.fftSize = 2048;
                     analyserRef.current = analyser;
                 }
 
@@ -219,7 +219,7 @@ export const Visualizer: React.FC = () => {
         // Re-connect analyser
         if (!analyserRef.current) {
             const analyser = ctx.createAnalyser();
-            analyser.fftSize = 256;
+            analyser.fftSize = 2048;
             analyserRef.current = analyser;
         }
         source.connect(analyserRef.current);
@@ -447,6 +447,15 @@ export const Visualizer: React.FC = () => {
         const ctx = canvasRef.current.getContext('2d');
         if (!ctx) return;
 
+        // Match canvas resolution to display size for crisp equalizer
+        const displayWidth = canvasRef.current.clientWidth;
+        const displayHeight = canvasRef.current.clientHeight;
+
+        if (canvasRef.current.width !== displayWidth || canvasRef.current.height !== displayHeight) {
+            canvasRef.current.width = displayWidth;
+            canvasRef.current.height = displayHeight;
+        }
+
         const width = canvasRef.current.width;
         const height = canvasRef.current.height;
 
@@ -492,6 +501,12 @@ export const Visualizer: React.FC = () => {
             const width = visualizer.get_width();
             const height = visualizer.get_height();
             if (width === 0 || height === 0) return;
+
+            // Ensure canvas matches image resolution
+            if (canvasRef.current.width !== width || canvasRef.current.height !== height) {
+                canvasRef.current.width = width;
+                canvasRef.current.height = height;
+            }
 
             const bufferPtr = visualizer.get_display_buffer_ptr();
             const len = visualizer.get_display_buffer_len();
