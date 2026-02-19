@@ -109,7 +109,15 @@ impl AudioVisualizer {
 
             // 2. Generate Palette
             // log("Rust: Generating Palette (Median Cut)");
-            let (palette, _) = median_cut(&sample_pixels, count as usize);
+            let (mut palette, _) = median_cut(&sample_pixels, count as usize);
+            
+            // Sort Palette by Hue
+            palette.sort_by(|a, b| {
+                let (h1, _, _) = rgb_to_hsl(a[0], a[1], a[2]);
+                let (h2, _, _) = rgb_to_hsl(b[0], b[1], b[2]);
+                h1.partial_cmp(&h2).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
             // log(&format!("Rust: Palette Generated ({} colors)", palette.len()));
             
             // Store to Static Arrays
