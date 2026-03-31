@@ -106,3 +106,12 @@ Added a "Start Mic" button to visualize live audio input.
 - **Issue**: In 64-color mode, the first few frequency bands were identical due to low FFT resolution (`fftSize=256` -> 128 bins).
 - **Fix**: Increased `fftSize` to `2048` (1024 bins).
 - **Result**: Bass frequencies are now distinct and high-resolution, even with few color bands. Performance remains excellent (60fps).
+
+## Feature: Maximize Screen Space
+- **Goal**: Allow the visualizer to occupy the full screen.
+- **Implementation**:
+    - Removed fixed-width container and header.
+    - Moved "Rust Audio Visualizer" title and description to a new **About Overlay**.
+    - Added a floating ℹ️ button to toggle the overlay.
+    - set `width: 100vw; height: 100vh` on the root container.
+- **Result**: The visualizer canvas now dynamically scales to fill the available window space.

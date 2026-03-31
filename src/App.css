@@ -1,24 +1,47 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
   text-align: center;
+  overflow: hidden;
+  /* Prevent scrollbars */
 }
 
 .app-container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  /* For absolute button */
 }
 
-header h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-  background: -webkit-linear-gradient(45deg, #ff6b6b, #fca311);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Remove header styles as header is gone */
+
+/* Floating Info Button */
+.info-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.2s;
+}
+
+.info-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
 }
 
 .visualizer-container {
@@ -26,12 +49,18 @@ header h1 {
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  /* Center content vertically */
 }
 
 .controls {
   display: flex;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  margin-top: 1rem;
+  /* Add some top margin since header is gone */
 }
 
 .upload-btn {
@@ -53,7 +82,7 @@ header h1 {
 .playback-controls {
   display: flex;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .control-btn {
@@ -74,46 +103,61 @@ header h1 {
 }
 
 .visualizer-canvas {
+  /* Allow canvas to fill available space but keep aspect ratio logic in JS? */
+  /* Actually, simply max-width 100% and max-height 100% works best */
   max-width: 100%;
+  max-height: 80vh;
+  /* Leave room for controls */
+  object-fit: contain;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
   border-radius: 4px;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+/* About Overlay Styles */
+.about-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(5px);
 }
 
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+.about-modal {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.about-modal h2 {
+  margin-top: 0;
+  background: -webkit-linear-gradient(45deg, #ff6b6b, #fca311);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
   color: #888;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: #fff;
 }
