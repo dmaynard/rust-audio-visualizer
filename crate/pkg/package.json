@@ -1,0 +1,14 @@
+{
+  "name": "audio_visualizer_core",
+  "version": "0.1.0",
+  "files": [
+    "audio_visualizer_core_bg.wasm",
+    "audio_visualizer_core.js",
+    "audio_visualizer_core.d.ts"
+  ],
+  "module": "audio_visualizer_core.js",
+  "types": "audio_visualizer_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
