@@ -365,6 +365,10 @@ impl AudioVisualizer {
     pub fn get_palette_ptr(&self) -> *const u8 {
         unsafe { PALETTE.as_ptr() }
     }
+
+    pub fn get_active_color_count(&self) -> usize {
+        unsafe { ACTIVE_PALETTE_LEN / 3 }
+    }
 }
 
 // Median Cut Implementation

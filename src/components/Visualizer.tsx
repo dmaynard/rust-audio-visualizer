@@ -496,15 +496,17 @@ export const Visualizer: React.FC = () => {
 
         const spectrumPtr = visualizer.get_spectrum_ptr();
         const palettePtr = visualizer.get_palette_ptr();
+        const activeColors = visualizer.get_active_color_count();
 
-        // We have `colorCount` bins (e.g. 64, 128, 256)
+        if (activeColors === 0) return;
+
         // Access raw memory
-        const spectrum = new Float32Array(wasmMemory.buffer, spectrumPtr, colorCount);
-        const palette = new Uint8Array(wasmMemory.buffer, palettePtr, colorCount * 3);
+        const spectrum = new Float32Array(wasmMemory.buffer, spectrumPtr, activeColors);
+        const palette = new Uint8Array(wasmMemory.buffer, palettePtr, activeColors * 3);
 
-        const barWidth = width / colorCount;
+        const barWidth = width / activeColors;
 
-        for (let i = 0; i < colorCount; i++) {
+        for (let i = 0; i < activeColors; i++) {
             const energy = spectrum[i]; // 0.0 to 1.0 (approx)
             const barHeight = energy * height * 0.8; // Scale to 80% height
 
