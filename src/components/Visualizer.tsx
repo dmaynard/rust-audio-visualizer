@@ -19,6 +19,7 @@ export const Visualizer: React.FC = () => {
     const [pausedAt, setPausedAt] = useState(0);
     const [hasAudio, setHasAudio] = useState(false);
     const [colorCount, setColorCount] = useState(64); // Default 64
+    const [decayFactor, setDecayFactor] = useState(0.995);
 
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -150,6 +151,14 @@ export const Visualizer: React.FC = () => {
             alert("Could not access microphone. See console.");
         } finally {
             isTogglingRef.current = false;
+        }
+    };
+
+    const handleDecayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = parseFloat(e.target.value);
+        setDecayFactor(val);
+        if (visualizer) {
+            visualizer.set_decay_factor(val);
         }
     };
 
@@ -689,6 +698,19 @@ export const Visualizer: React.FC = () => {
                         <span style={{ marginLeft: '4px' }}>{count}</span>
                     </label>
                 ))}
+
+                <span style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>Decay:</span>
+                <input 
+                    type="range" 
+                    min="0.8" 
+                    max="0.999" 
+                    step="0.001" 
+                    value={decayFactor} 
+                    onChange={handleDecayChange} 
+                    disabled={!visualizer}
+                    style={{ verticalAlign: 'middle' }}
+                    title={`Decay Factor: ${decayFactor}`}
+                />
             </div>
 
             {!visualizer ? <p>Loading WASM...</p> : null}

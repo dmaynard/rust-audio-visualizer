@@ -28,6 +28,7 @@ static mut PALETTE: [u8; 768] = [0; 768];
 static mut ORIGINAL_PALETTE: [u8; 768] = [0; 768];
 static mut PALETTE_HSL: [f32; 768] = [0.0; 768]; // H, S, L interleaved
 static mut BIN_PEAKS: [f32; 256] = [0.1; 256];
+static mut AGC_DECAY: f32 = 0.995;
 
 // State moved to Statics
 static mut IMG_WIDTH: u32 = 0;
@@ -89,6 +90,10 @@ impl AudioVisualizer {
         self.set_color_count(64);
         
         // log("Rust: load_image returning");
+    }
+
+    pub fn set_decay_factor(&self, factor: f32) {
+        unsafe { AGC_DECAY = factor; }
     }
 
     pub fn set_color_count(&self, count: u8) {
@@ -261,8 +266,8 @@ impl AudioVisualizer {
                 if energy < 0.03 { energy = 0.0; }
 
                 // AGC Implementation
-                // Slow down decay significantly (0.90 -> 0.995) to prevent "pumping" on low noise
-                BIN_PEAKS[i] *= 0.995; 
+                // Slow down decay significantly to prevent "pumping" on low noise
+                BIN_PEAKS[i] *= AGC_DECAY; 
                 // Increase floor to 0.03 to match noise gate
                 if BIN_PEAKS[i] < 0.03 { BIN_PEAKS[i] = 0.03; }
                 if energy > BIN_PEAKS[i] { BIN_PEAKS[i] = energy; }
