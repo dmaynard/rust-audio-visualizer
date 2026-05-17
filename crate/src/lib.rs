@@ -28,6 +28,7 @@ static mut PALETTE: [u8; 768] = [0; 768];
 static mut ORIGINAL_PALETTE: [u8; 768] = [0; 768];
 static mut PALETTE_HSL: [f32; 768] = [0.0; 768]; // H, S, L interleaved
 static mut BIN_PEAKS: [f32; 256] = [0.1; 256];
+static mut SPECTRUM: [f32; 256] = [0.0; 256];
 static mut AGC_DECAY: f32 = 0.995;
 
 // State moved to Statics
@@ -273,6 +274,7 @@ impl AudioVisualizer {
                 if energy > BIN_PEAKS[i] { BIN_PEAKS[i] = energy; }
                 
                 let normalized = if BIN_PEAKS[i] > 0.0 { energy / BIN_PEAKS[i] } else { 0.0 };
+                SPECTRUM[i] = normalized;
                 
                 // HSL Modulation Logic
                 // User Requirement: "Zero energy to be the same as the original palette"
@@ -351,7 +353,7 @@ impl AudioVisualizer {
     }
 
     pub fn get_spectrum_ptr(&self) -> *const f32 {
-        unsafe { BIN_PEAKS.as_ptr() }
+        unsafe { SPECTRUM.as_ptr() }
     }
 
     pub fn get_palette_ptr(&self) -> *const u8 {

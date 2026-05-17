@@ -19,7 +19,7 @@ export const Visualizer: React.FC = () => {
     const [pausedAt, setPausedAt] = useState(0);
     const [hasAudio, setHasAudio] = useState(false);
     const [colorCount, setColorCount] = useState(64); // Default 64
-    const [decayFactor, setDecayFactor] = useState(0.995);
+    const [smoothing, setSmoothing] = useState(0.8);
 
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -133,6 +133,7 @@ export const Visualizer: React.FC = () => {
                     analyser.fftSize = 2048;
                     analyserRef.current = analyser;
                 }
+                analyserRef.current.smoothingTimeConstant = smoothing;
 
                 source.connect(analyserRef.current);
                 // DO NOT connect to destination (speakers) to avoid feedback!
@@ -154,11 +155,11 @@ export const Visualizer: React.FC = () => {
         }
     };
 
-    const handleDecayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSmoothingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = parseFloat(e.target.value);
-        setDecayFactor(val);
-        if (visualizer) {
-            visualizer.set_decay_factor(val);
+        setSmoothing(val);
+        if (analyserRef.current) {
+            analyserRef.current.smoothingTimeConstant = val;
         }
     };
 
@@ -233,6 +234,7 @@ export const Visualizer: React.FC = () => {
             analyser.fftSize = 2048;
             analyserRef.current = analyser;
         }
+        analyserRef.current.smoothingTimeConstant = smoothing;
         source.connect(analyserRef.current);
 
         // Setup initial buffer size once to avoid reallocation in loop
@@ -699,17 +701,17 @@ export const Visualizer: React.FC = () => {
                     </label>
                 ))}
 
-                <span style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>Decay:</span>
+                <span style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>Smoothing:</span>
                 <input 
                     type="range" 
-                    min="0.8" 
-                    max="0.999" 
-                    step="0.001" 
-                    value={decayFactor} 
-                    onChange={handleDecayChange} 
+                    min="0.0" 
+                    max="0.95" 
+                    step="0.05" 
+                    value={smoothing} 
+                    onChange={handleSmoothingChange} 
                     disabled={!visualizer}
                     style={{ verticalAlign: 'middle' }}
-                    title={`Decay Factor: ${decayFactor}`}
+                    title={`Audio Smoothing: ${smoothing}`}
                 />
             </div>
 
