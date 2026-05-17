@@ -129,14 +129,15 @@
 }
 
 .about-modal {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: #222;
+  color: #f5f5f5;
+  border: 1px solid #444;
   border-radius: 12px;
   padding: 2rem;
-  max-width: 500px;
+  max-width: 600px;
   width: 90%;
   position: relative;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
 }
 
 .about-modal h2 {
