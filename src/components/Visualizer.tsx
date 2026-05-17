@@ -409,18 +409,31 @@ export const Visualizer: React.FC = () => {
 
                 // Load Audio
                 try {
-                    const response = await fetch("Chopin_-_Polonaise_in_A_Op-40_No-1_(Military)_(Piano_Performance_by_eldüendesüarez).mp3");
+                    // Encode URI to handle special characters like ü and ä
+                    const url = "Chopin_-_Polonaise_in_A_Op-40_No-1_(Military)_(Piano_Performance_by_eldüendesüarez).mp3";
+                    const response = await fetch(url);
                     if (response.ok) {
                         const buffer = await response.arrayBuffer();
                         await processAudio(buffer);
+                        // Start playing automatically? No, but let's make sure we log success
+                        console.log("Default audio loaded successfully.");
+                    } else {
+                        console.error("Failed to load default audio, status:", response.status, response.statusText);
                     }
                 } catch (e) {
-                    console.error("Failed to load default audio:", e);
+                    console.error("Failed to load default audio (exception):", e);
                 }
             };
             loadDefaults();
         }
     }, [visualizer, wasmMemory]);
+
+    // Redraw the canvas on re-renders if paused, in case React cleared the canvas size
+    useEffect(() => {
+        if (!isPlayingRef.current && visualizer && wasmMemory) {
+            renderFrame();
+        }
+    });
 
     const resizeCanvas = () => {
         if (!visualizer || !canvasRef.current) return;
@@ -681,7 +694,7 @@ export const Visualizer: React.FC = () => {
             {!visualizer ? <p>Loading WASM...</p> : null}
             <canvas ref={canvasRef} className="visualizer-canvas" />
             <p style={{ marginTop: '15px', color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                drag new image or audio onto the image above
+                drag new image or audio onto the image above {hasAudio && !isPlaying && "— or click ▶ Play"}
             </p>
         </div>
     );
