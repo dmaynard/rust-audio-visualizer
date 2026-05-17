@@ -10,8 +10,8 @@ release
 **/*.rs.bk
 
 # WASM
-pkg
-crate/pkg
+# pkg
+# crate/pkg
 crate/target
 
 # OS
