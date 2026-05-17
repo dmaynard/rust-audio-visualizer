@@ -13,7 +13,8 @@ export const About: React.FC<AboutProps> = ({ isOpen, onClose }) => {
         <div className="about-overlay" onClick={onClose}>
             <div className="about-modal" onClick={e => e.stopPropagation()}>
                 <button className="close-btn" onClick={onClose}>×</button>
-                <h2>Rust Audio Visualizer</h2>
+                <h2 style={{ marginBottom: '5px' }}>Rust Audio Visualizer</h2>
+                <p style={{ marginTop: 0, fontStyle: 'italic', color: '#aaa', fontSize: '0.9em' }}>by david s. maynard and AntiGravity</p>
                 <p>WASM-powered Median Cut Quantization</p>
                 
                 <div className="about-content" style={{ marginTop: '20px', textAlign: 'left', fontSize: '0.9em', lineHeight: '1.5' }}>
@@ -35,7 +36,7 @@ export const About: React.FC<AboutProps> = ({ isOpen, onClose }) => {
                         <li><strong>Image:</strong> <em>L'atmosphère: météorologie populaire</em> by Camille Flammarion, 1888 (Colored version of the Flammarion engraving)</li>
                     </ul>
 
-                    <div style={{ marginTop: '25px', textAlign: 'center' }}>
+                    <div style={{ marginTop: '25px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <a 
                             href="https://github.com/dmaynard/rust-audio-visualizer" 
                             target="_blank" 
@@ -43,6 +44,14 @@ export const About: React.FC<AboutProps> = ({ isOpen, onClose }) => {
                             style={{ color: '#3498db', textDecoration: 'none', fontWeight: 'bold' }}
                         >
                             View Source on GitHub
+                        </a>
+                        <a 
+                            href="https://davidsmaynard.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ color: '#3498db', textDecoration: 'none', fontWeight: 'bold' }}
+                        >
+                            Visit davidsmaynard.com
                         </a>
                     </div>
                 </div>
