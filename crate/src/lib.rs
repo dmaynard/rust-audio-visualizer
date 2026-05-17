@@ -1,5 +1,6 @@
+#![allow(static_mut_refs)]
+#![allow(unexpected_cfgs)]
 use wasm_bindgen::prelude::*;
-use image::DynamicImage;
 
 #[wasm_bindgen]
 extern "C" {
@@ -213,7 +214,6 @@ impl AudioVisualizer {
             // Quadratic Scaling (Pseudo-Log) to match human hearing
             // This grants more resolution to low frequencies (Bass) and compresses high frequencies
             let len_f = len as f32;
-            let pc_f = palette_colors as f32;
             
             // NEW: Scan for total silence first to ensure exact restoration (bypass HSL float errors)
             let mut max_energy_all: u8 = 0;

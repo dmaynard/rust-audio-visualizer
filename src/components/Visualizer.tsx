@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import init, { AudioVisualizer } from '../../crate/pkg/audio_visualizer_core';
+import heic2any from 'heic2any';
 
 export const Visualizer: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,12 +32,41 @@ export const Visualizer: React.FC = () => {
     const [isMicActive, setIsMicActive] = useState(false);
 
     // Microphone Selection
-    interface AudioDevice {
-        deviceId: string;
-        label: string;
-    }
-    const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
-    const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+
+    const [isDragging, setIsDragging] = useState(false);
+    const [isConverting, setIsConverting] = useState(false);
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            if (file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.heic')) {
+                await processImageFile(file);
+            } else if (file.type.startsWith('audio/')) {
+                if (isMicActive) {
+                    if (micStreamRef.current) {
+                        micStreamRef.current.getTracks().forEach(track => track.stop());
+                        micStreamRef.current = null;
+                    }
+                    setIsMicActive(false);
+                }
+                const buffer = await file.arrayBuffer();
+                await processAudio(buffer);
+                playAudio();
+            }
+        }
+    };
 
     useEffect(() => {
         // Animation should run if File Playing OR Mic Active
@@ -48,35 +78,7 @@ export const Visualizer: React.FC = () => {
         }
     }, [isPlaying, isMicActive]);
 
-    // Fetch Audio Devices on Mount
-    useEffect(() => {
-        const fetchDevices = async () => {
-            try {
-                // Check permission first (optional, but helps get labels)
-                // await navigator.mediaDevices.getUserMedia({ audio: true }); 
 
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioInputs = devices
-                    .filter(device => device.kind === 'audioinput')
-                    .map(device => ({
-                        deviceId: device.deviceId,
-                        label: device.label || `Microphone ${device.deviceId.slice(0, 5)}...`
-                    }));
-
-                setAudioDevices(audioInputs);
-                if (audioInputs.length > 0 && !selectedDeviceId) {
-                    setSelectedDeviceId(audioInputs[0].deviceId);
-                }
-            } catch (e) {
-                console.error("Error fetching audio devices:", e);
-            }
-        };
-        fetchDevices();
-
-        // Listen for device changes
-        navigator.mediaDevices.addEventListener('devicechange', fetchDevices);
-        return () => navigator.mediaDevices.removeEventListener('devicechange', fetchDevices);
-    }, []);
 
     const isTogglingRef = useRef(false);
 
@@ -100,7 +102,7 @@ export const Visualizer: React.FC = () => {
                 console.log("Visualizer: Starting Mic");
                 // Request Mic Permission with specific device if selected
                 const constraints = {
-                    audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true
+                    audio: true
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -352,16 +354,29 @@ export const Visualizer: React.FC = () => {
         img.src = url;
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || !e.target.files[0] || !visualizer) return;
-        const file = e.target.files[0];
-        const url = URL.createObjectURL(file);
-        processImage(url);
-        // Note: We don't revokeObjectURL here inside the helper because we might need it for defaults? 
-        // Actually, for file uploads we should revoke. 
-        // Modified processImage to NOT revoke. Caller handles it? 
-        // Or just let GC handle it for now.
+    const processImageFile = async (file: File) => {
+        try {
+            if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
+                setIsConverting(true);
+                const convertedBlob = await heic2any({
+                    blob: file,
+                    toType: 'image/png'
+                });
+                const blobToUse = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                const url = URL.createObjectURL(blobToUse);
+                setIsConverting(false);
+                processImage(url);
+            } else {
+                const url = URL.createObjectURL(file);
+                processImage(url);
+            }
+        } catch (error) {
+            setIsConverting(false);
+            console.error("Error processing image file:", error);
+        }
     };
+
+
 
     // Helper: Process Audio Buffer
     const processAudio = async (buffer: ArrayBuffer) => {
@@ -383,24 +398,7 @@ export const Visualizer: React.FC = () => {
         }
     };
 
-    const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || !e.target.files[0]) return;
 
-        // If Mic is active, stop it
-        if (isMicActive) {
-
-            if (micStreamRef.current) {
-                micStreamRef.current.getTracks().forEach(track => track.stop());
-                micStreamRef.current = null;
-            }
-            setIsMicActive(false);
-        }
-
-        const file = e.target.files[0];
-        const buffer = await file.arrayBuffer();
-        await processAudio(buffer);
-        playAudio(); // Auto-play for user uploads
-    };
 
     // Load Defaults Once WASM is Ready
     useEffect(() => {
@@ -579,25 +577,67 @@ export const Visualizer: React.FC = () => {
     };
 
     return (
-        <div className="visualizer-container">
-            <div className="controls">
-                <label className="upload-btn">
-                    Load Image
-                    <input type="file" accept="image/*" onChange={handleImageUpload} hidden />
-                </label>
-                <label className="upload-btn">
-                    Load Audio
-                    <input type="file" accept="audio/*" onChange={handleAudioUpload} hidden />
-                </label>
-            </div>
+        <div 
+            className="visualizer-container"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{ position: 'relative' }}
+        >
+            {isConverting && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 200,
+                    pointerEvents: 'none'
+                }}>
+                    <div style={{
+                        width: '50px',
+                        height: '50px',
+                        border: '5px solid rgba(255,255,255,0.3)',
+                        borderRadius: '50%',
+                        borderTopColor: '#fff',
+                        animation: 'spin 1s ease-in-out infinite'
+                    }} />
+                    <h3 style={{ color: 'white', marginTop: '15px' }}>Converting HEIC...</h3>
+                    <style>{`
+                        @keyframes spin {
+                            to { transform: rotate(360deg); }
+                        }
+                    `}</style>
+                </div>
+            )}
+            {isDragging && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    border: '4px dashed rgba(255, 255, 255, 0.8)',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 100,
+                    pointerEvents: 'none'
+                }}>
+                    <h2 style={{ color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>Drop image to upload</h2>
+                </div>
+            )}
+
             <div className="playback-controls" style={{ marginTop: '10px' }}>
                 {hasAudio && (
                     <>
-                        <button className="control-btn" onClick={rewindAudio}>⏮ Rewind</button>
+                        <button className="control-btn" onClick={rewindAudio} title="Rewind">⏮</button>
                         {!isPlaying ? (
-                            <button className="control-btn" onClick={playAudio}>▶ Play</button>
+                            <button className="control-btn" onClick={playAudio} title="Play">▶</button>
                         ) : (
-                            <button className="control-btn" onClick={pauseAudio}>⏸ Pause</button>
+                            <button className="control-btn" onClick={pauseAudio} title="Pause">⏸</button>
                         )}
                     </>
                 )}
@@ -605,33 +645,20 @@ export const Visualizer: React.FC = () => {
                 <button
                     className="control-btn"
                     onClick={toggleMic}
+                    title={isMicActive ? "Stop Mic" : "Start Mic"}
                     style={{ backgroundColor: isMicActive ? '#e74c3c' : '', marginLeft: hasAudio ? '10px' : '0' }}
                 >
-                    {isMicActive ? "⏹ Stop Mic" : "🎤 Start Mic"}
+                    {isMicActive ? "⏹" : "🎤"}
                 </button>
 
                 <button
                     className="control-btn"
                     onClick={() => setViewMode(prev => prev === 'image' ? 'equalizer' : 'image')}
+                    title={viewMode === 'image' ? "Switch to Chart" : "Switch to Image"}
                     style={{ marginLeft: '10px' }}
                 >
-                    {viewMode === 'image' ? "📊 Chart" : "🖼️ Image"}
+                    {viewMode === 'image' ? "📊" : "🖼️"}
                 </button>
-
-                {audioDevices.length > 0 && (
-                    <select
-                        style={{ marginLeft: '10px', padding: '5px' }}
-                        value={selectedDeviceId}
-                        onChange={(e) => setSelectedDeviceId(e.target.value)}
-                        disabled={isMicActive}
-                    >
-                        {audioDevices.map(device => (
-                            <option key={device.deviceId} value={device.deviceId}>
-                                {device.label}
-                            </option>
-                        ))}
-                    </select>
-                )}
             </div>
 
             <div className="settings-panel" style={{ marginTop: '10px', marginBottom: '10px' }}>
@@ -653,6 +680,9 @@ export const Visualizer: React.FC = () => {
 
             {!visualizer ? <p>Loading WASM...</p> : null}
             <canvas ref={canvasRef} className="visualizer-canvas" />
+            <p style={{ marginTop: '15px', color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                drag new image or audio onto the image above
+            </p>
         </div>
     );
 };
