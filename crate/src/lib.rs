@@ -30,6 +30,7 @@ static mut PALETTE_HSL: [f32; 768] = [0.0; 768]; // H, S, L interleaved
 static mut BIN_PEAKS: [f32; 256] = [0.1; 256];
 static mut SPECTRUM: [f32; 256] = [0.0; 256];
 static mut AGC_DECAY: f32 = 0.995;
+static mut GLOBAL_GAIN: f32 = 1.0;
 
 // State moved to Statics
 static mut IMG_WIDTH: u32 = 0;
@@ -95,6 +96,10 @@ impl AudioVisualizer {
 
     pub fn set_decay_factor(&self, factor: f32) {
         unsafe { AGC_DECAY = factor; }
+    }
+
+    pub fn set_global_gain(&self, gain: f32) {
+        unsafe { GLOBAL_GAIN = gain; }
     }
 
     pub fn set_color_count(&self, count: u8) {
@@ -261,7 +266,8 @@ impl AudioVisualizer {
                     if val > max_val { max_val = val; }
                 }
                 
-                let mut energy = max_val as f32 / 255.0;
+                let mut energy = (max_val as f32 / 255.0) * GLOBAL_GAIN;
+                if energy > 1.0 { energy = 1.0; }
 
                 // Noise Gate: Cut low-level broadband noise which causes "all-on" look
                 if energy < 0.03 { energy = 0.0; }
@@ -274,7 +280,7 @@ impl AudioVisualizer {
                 if energy > BIN_PEAKS[i] { BIN_PEAKS[i] = energy; }
                 
                 let normalized = if BIN_PEAKS[i] > 0.0 { energy / BIN_PEAKS[i] } else { 0.0 };
-                SPECTRUM[i] = normalized;
+                SPECTRUM[i] = energy;
                 
                 // HSL Modulation Logic
                 // User Requirement: "Zero energy to be the same as the original palette"

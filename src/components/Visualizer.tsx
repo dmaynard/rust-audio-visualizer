@@ -20,6 +20,7 @@ export const Visualizer: React.FC = () => {
     const [hasAudio, setHasAudio] = useState(false);
     const [colorCount, setColorCount] = useState(64); // Default 64
     const [smoothing, setSmoothing] = useState(0.8);
+    const [globalGain, setGlobalGain] = useState(1.0);
 
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -160,6 +161,14 @@ export const Visualizer: React.FC = () => {
         setSmoothing(val);
         if (analyserRef.current) {
             analyserRef.current.smoothingTimeConstant = val;
+        }
+    };
+
+    const handleGainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = parseFloat(e.target.value);
+        setGlobalGain(val);
+        if (visualizer) {
+            visualizer.set_global_gain(val);
         }
     };
 
@@ -712,6 +721,19 @@ export const Visualizer: React.FC = () => {
                     disabled={!visualizer}
                     style={{ verticalAlign: 'middle' }}
                     title={`Audio Smoothing: ${smoothing}`}
+                />
+
+                <span style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>Gain:</span>
+                <input 
+                    type="range" 
+                    min="0.1" 
+                    max="5.0" 
+                    step="0.1" 
+                    value={globalGain} 
+                    onChange={handleGainChange} 
+                    disabled={!visualizer}
+                    style={{ verticalAlign: 'middle' }}
+                    title={`Global Gain: ${globalGain.toFixed(1)}x`}
                 />
             </div>
 
