@@ -65,9 +65,9 @@
 
 .upload-btn {
   padding: 0.8rem 1.6rem;
-  background-color: #1a1a1a;
-  color: #ffffff;
-  border: 1px solid #333;
+  background-color: #add8e6;
+  color: #1a1a1a;
+  border: 1px solid #87ceeb;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
@@ -75,8 +75,8 @@
 }
 
 .upload-btn:hover {
-  background-color: #333;
-  border-color: #ff6b6b;
+  background-color: #87ceeb;
+  border-color: #00bfff;
 }
 
 .playback-controls {
@@ -87,9 +87,9 @@
 
 .control-btn {
   padding: 0.6rem 1.2rem;
-  background-color: #2a2a2a;
-  color: #ffffff;
-  border: 1px solid #444;
+  background-color: #add8e6;
+  color: #1a1a1a;
+  border: 1px solid #87ceeb;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -98,8 +98,8 @@
 }
 
 .control-btn:hover {
-  background-color: #444;
-  border-color: #fca311;
+  background-color: #87ceeb;
+  border-color: #00bfff;
 }
 
 .visualizer-canvas {
