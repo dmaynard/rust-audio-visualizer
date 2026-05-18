@@ -25,6 +25,9 @@ export const Visualizer: React.FC = () => {
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationFrameRef = useRef<number>(0);
+    const imageInputRef = useRef<HTMLInputElement>(null);
+    const audioInputRef = useRef<HTMLInputElement>(null);
+    const isManualStopRef = useRef(false);
 
     // Ref to track playing state inside requestAnimationFrame loop without stale closure
     const isPlayingRef = useRef(false);
@@ -67,6 +70,30 @@ export const Visualizer: React.FC = () => {
                 await processAudio(buffer);
                 playAudio();
             }
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            await processImageFile(e.target.files[0]);
+            e.target.value = ''; // Reset input
+        }
+    };
+
+    const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            if (isMicActive) {
+                if (micStreamRef.current) {
+                    micStreamRef.current.getTracks().forEach(track => track.stop());
+                    micStreamRef.current = null;
+                }
+                setIsMicActive(false);
+            }
+            const buffer = await file.arrayBuffer();
+            await processAudio(buffer);
+            playAudio();
+            e.target.value = ''; // Reset input
         }
     };
 
@@ -210,6 +237,7 @@ export const Visualizer: React.FC = () => {
 
     const stopAudio = () => {
         if (sourceRef.current) {
+            isManualStopRef.current = true;
             // Check if source has a stop method (BufferSource) vs StreamSource
             if ('stop' in sourceRef.current) {
                 try {
@@ -230,6 +258,7 @@ export const Visualizer: React.FC = () => {
         }
 
         stopAudio(); // Stop any existing source
+        isManualStopRef.current = false;
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
 
         const ctx = audioContextRef.current;
@@ -261,7 +290,11 @@ export const Visualizer: React.FC = () => {
         sourceRef.current = source;
 
         source.onended = () => {
-            // Optional: Handle natural end
+            if (!isManualStopRef.current) {
+                setIsPlaying(false);
+                isPlayingRef.current = false;
+                setPausedAt(0);
+            }
         };
 
         animate();
@@ -666,9 +699,42 @@ export const Visualizer: React.FC = () => {
             )}
 
             <div className="playback-controls" style={{ marginTop: '10px' }}>
+                <input
+                    type="file"
+                    accept="image/*,.heic"
+                    style={{ display: 'none' }}
+                    ref={imageInputRef}
+                    onChange={handleImageUpload}
+                />
+                <input
+                    type="file"
+                    accept="audio/*"
+                    style={{ display: 'none' }}
+                    ref={audioInputRef}
+                    onChange={handleAudioUpload}
+                />
+                
+                <button 
+                    className="control-btn" 
+                    onClick={() => imageInputRef.current?.click()} 
+                    title="Upload Custom Image"
+                >
+                    🖼️ Image
+                </button>
+                <button 
+                    className="control-btn" 
+                    onClick={() => audioInputRef.current?.click()} 
+                    title="Upload Custom Audio"
+                    style={{ marginLeft: '10px', marginRight: '10px' }}
+                >
+                    🎵 Audio
+                </button>
+
+                <span style={{ borderLeft: '1px solid #444', height: '20px', display: 'inline-block', verticalAlign: 'middle', margin: '0 5px' }}></span>
+
                 {hasAudio && (
                     <>
-                        <button className="control-btn" onClick={rewindAudio} title="Rewind">⏮</button>
+                        <button className="control-btn" onClick={rewindAudio} title="Rewind" style={{ marginLeft: '10px' }}>⏮</button>
                         {!isPlaying ? (
                             <button className="control-btn" onClick={playAudio} title="Play">▶</button>
                         ) : (
@@ -742,7 +808,7 @@ export const Visualizer: React.FC = () => {
             {!visualizer ? <p>Loading WASM...</p> : null}
             <canvas ref={canvasRef} className="visualizer-canvas" />
             <p style={{ marginTop: '15px', color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                drag new image or audio onto the image above {hasAudio && !isPlaying && "— or click ▶ Play"}
+                use buttons, or drag-and-drop custom media onto the canvas {hasAudio && !isPlaying && "— or click ▶ Play"}
             </p>
         </div>
     );
