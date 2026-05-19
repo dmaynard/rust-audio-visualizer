@@ -762,8 +762,8 @@ export const Visualizer: React.FC = () => {
                 </button>
             </div>
 
-            <div className="settings-panel" style={{ marginTop: '10px', marginBottom: '10px' }}>
-                <span style={{ marginRight: '10px', fontWeight: 'bold' }}>Colors:</span>
+            <div className="settings-panel">
+                <span style={{ fontWeight: 'bold' }}>Colors:</span>
                 {[4, 8, 16, 32, 64].map(count => (
                     <label key={count} style={{ marginRight: '10px', cursor: 'pointer' }}>
                         <input
@@ -778,7 +778,7 @@ export const Visualizer: React.FC = () => {
                     </label>
                 ))}
 
-                <span style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>Smoothing:</span>
+                <span style={{ fontWeight: 'bold' }}>Smoothing:</span>
                 <input 
                     type="range" 
                     min="0.0" 
@@ -791,7 +791,7 @@ export const Visualizer: React.FC = () => {
                     title={`Audio Smoothing: ${smoothing}`}
                 />
 
-                <span style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>Gain:</span>
+                <span style={{ fontWeight: 'bold' }}>Gain:</span>
                 <input 
                     type="range" 
                     min="0.1" 
