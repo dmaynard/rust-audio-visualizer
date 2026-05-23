@@ -15,6 +15,7 @@ export const Visualizer: React.FC = () => {
 
     // Playback state
     const [isPlaying, setIsPlaying] = useState(false);
+    const [hasStartedPlayback, setHasStartedPlayback] = useState(false);
     const [startTime, setStartTime] = useState(0);
     const [pausedAt, setPausedAt] = useState(0);
     const [hasAudio, setHasAudio] = useState(false);
@@ -286,6 +287,7 @@ export const Visualizer: React.FC = () => {
 
         setStartTime(ctx.currentTime - offset);
         setIsPlaying(true);
+        setHasStartedPlayback(true);
         isPlayingRef.current = true; // Sync update for animation loop
         sourceRef.current = source;
 
@@ -736,7 +738,13 @@ export const Visualizer: React.FC = () => {
                     <>
                         <button className="control-btn" onClick={rewindAudio} title="Rewind" style={{ marginLeft: '10px' }}>⏮</button>
                         {!isPlaying ? (
-                            <button className="control-btn" onClick={playAudio} title="Play">▶</button>
+                            <button 
+                                className={`control-btn ${!hasStartedPlayback ? 'needs-play' : ''}`} 
+                                onClick={playAudio} 
+                                title="Play"
+                            >
+                                ▶
+                            </button>
                         ) : (
                             <button className="control-btn" onClick={pauseAudio} title="Pause">⏸</button>
                         )}

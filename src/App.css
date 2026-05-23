@@ -114,6 +114,31 @@
   border-color: #00bfff;
 }
 
+@keyframes gentle-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.8);
+    background-color: #add8e6;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 20px rgba(255, 255, 255, 0);
+    background-color: #00bfff;
+    color: white;
+    transform: scale(1.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    background-color: #add8e6;
+    transform: scale(1);
+  }
+}
+
+.needs-play {
+  animation: gentle-pulse 1.2s infinite ease-in-out;
+  font-weight: 800;
+  font-size: 1.1em;
+}
+
 .visualizer-canvas {
   /* Allow canvas to fill available space but keep aspect ratio logic in JS? */
   /* Actually, simply max-width 100% and max-height 100% works best */
