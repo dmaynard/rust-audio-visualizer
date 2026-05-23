@@ -46,6 +46,14 @@ export const About: React.FC<AboutProps> = ({ isOpen, onClose }) => {
                             View Source on GitHub
                         </a>
                         <a 
+                            href="https://software-artist.com/blog/rust-audio-visualizer" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ color: '#3498db', textDecoration: 'none', fontWeight: 'bold' }}
+                        >
+                            Read the Technical Deep Dive
+                        </a>
+                        <a 
                             href="https://davidsmaynard.com" 
                             target="_blank" 
                             rel="noopener noreferrer"
